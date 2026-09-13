@@ -38,6 +38,7 @@ OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
     "brightness": (-18.0, 18.0),
     "effect_amount": (0.0, 1.0),
     "emotion_intensity": (0.0, 1.0),
+    "aggression": (0.0, 1.0),
 }
 
 # Aliases em portugues, para o roteiro poder ser escrito no idioma do usuario.
@@ -57,6 +58,9 @@ OVERRIDE_ALIASES = {
     "intensidade": "effect_amount",
     "forca": "emotion_intensity",
     "força": "emotion_intensity",
+    "agressividade": "aggression",
+    "agressao": "aggression",
+    "agressão": "aggression",
 }
 
 

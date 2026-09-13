@@ -420,6 +420,120 @@ def saturate(x: np.ndarray, drive: float = 3.0) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
+# Compressao e agressao vocal
+# --------------------------------------------------------------------------
+
+
+def compress(
+    x: np.ndarray,
+    sr: int,
+    threshold_db: float = -24.0,
+    ratio: float = 6.0,
+    attack_ms: float = 3.0,
+    release_ms: float = 80.0,
+    makeup_db: float = 0.0,
+    control_hop: int = 64,
+) -> np.ndarray:
+    """Compressor com envelope assimetrico (ataque rapido, alivio lento).
+
+    O envelope e calculado em taxa de controle (um valor a cada `control_hop`
+    amostras) e depois interpolado de volta. E como compressores reais operam,
+    e mantem o laco recursivo — que nao vetoriza — curto o bastante para rodar
+    rapido em Python.
+    """
+    if len(x) == 0:
+        return x
+
+    n_blocos = int(np.ceil(len(x) / control_hop))
+    preenchido = np.pad(x, (0, n_blocos * control_hop - len(x)))
+    picos = np.max(np.abs(preenchido.reshape(n_blocos, control_hop)), axis=1)
+
+    a_ataque = float(np.exp(-control_hop / max(sr * attack_ms / 1000.0, 1e-6)))
+    a_alivio = float(np.exp(-control_hop / max(sr * release_ms / 1000.0, 1e-6)))
+
+    envelope = np.empty(n_blocos, dtype=np.float64)
+    anterior = 0.0
+    for i, pico in enumerate(picos):
+        coef = a_ataque if pico > anterior else a_alivio
+        anterior = coef * anterior + (1.0 - coef) * pico
+        envelope[i] = anterior
+
+    envelope_db = 20.0 * np.log10(np.maximum(envelope, EPS))
+    excesso = np.maximum(0.0, envelope_db - threshold_db)
+    ganho_db = -excesso * (1.0 - 1.0 / max(ratio, 1.0))
+
+    centros = np.arange(n_blocos) * control_hop + control_hop / 2.0
+    ganho = np.interp(np.arange(len(x)), centros, 10.0 ** (ganho_db / 20.0))
+    return (x * ganho * db_to_lin(makeup_db)).astype(np.float32)
+
+
+def crest_factor_db(x: np.ndarray) -> float:
+    """Distancia entre pico e RMS. Cai quando o sinal e comprimido."""
+    if len(x) == 0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(np.square(x, dtype=np.float64))))
+    return lin_to_db(float(np.max(np.abs(x)))) - lin_to_db(rms)
+
+
+def aggression(x: np.ndarray, sr: int, amount: float = 0.6) -> np.ndarray:
+    """Deixa a voz agressiva, como uma voz gritada num PA.
+
+    O Kokoro nao produz esforco vocal: as vozes sao embeddings fixos, sem
+    tensao de prega nem fonacao pressionada. O que da para fazer e reproduzir
+    os *correlatos acusticos* do grito, que sao exatamente o que um tecnico de
+    som faz para um vocal cortar:
+
+    - compressao forte, que e como a voz gritada soa — densa e pressionada;
+    - saturacao, porque o esforco vocal gera harmonicos;
+    - energia deslocada para 2 a 5 kHz, onde vive a agressividade;
+    - corte dos graves, que a compressao levanta como ronco.
+
+    Ao contrario do deslocamento de tom, nada disso mexe nos formantes: a voz
+    continua sendo a mesma voz, so que esgoelada.
+    """
+    amount = float(np.clip(amount, 0.0, 1.0))
+    if amount <= 0.0 or len(x) == 0:
+        return x
+
+    referencia = float(np.max(np.abs(x)))
+    if referencia < EPS:
+        return x
+
+    # Limpar os graves antes de distorcer evita que o ronco intermodule com o
+    # resto. 70 Hz fica abaixo do fundamental de qualquer voz (85 a 250 Hz).
+    out = _pass(x, sr, 70.0, high=True)
+
+    out = compress(
+        out, sr,
+        threshold_db=-20.0 - 10.0 * amount,
+        ratio=2.5 + 7.5 * amount,
+        attack_ms=2.0,
+        release_ms=70.0,
+    )
+    # Makeup: sem devolver o nivel, o sinal comprimido chega tao baixo a
+    # saturacao que ela opera na regiao linear e o drive nao acontece.
+    out = peak_normalize(out, lin_to_db(referencia))
+
+    out = saturate(out, drive=1.0 + 5.0 * amount)
+    # Segundo corte, agora depois da distorcao: a saturacao gera produtos de
+    # intermodulacao bem abaixo da voz (medido: 1,4% da energia total) que o
+    # corte da entrada nao alcanca, por vir antes dela.
+    #
+    # Fica em 45 Hz de proposito. Cortes mais altos limpam um pouco mais, mas a
+    # rotacao de fase perto do fundamental levanta os picos e custa densidade —
+    # justamente o que este efeito existe para ganhar. A 45 Hz some 99,9% do
+    # ronco com o menor custo, e nenhuma voz chega la embaixo.
+    out = _pass(out, sr, 45.0, high=True)
+    out = _shelf(out, sr, 2200.0, 4.0 * amount, high=True)
+
+    # Volta ao pico original: o nivel quem decide e o preset, nao o efeito.
+    pico = float(np.max(np.abs(out)))
+    if pico > EPS:
+        out = out * (referencia / pico)
+    return out.astype(np.float32)
+
+
+# --------------------------------------------------------------------------
 # Montagem da timeline
 # --------------------------------------------------------------------------
 

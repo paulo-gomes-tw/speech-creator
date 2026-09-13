@@ -183,6 +183,48 @@ O painel de **linha do tempo** (aba Roteiro) mostra a velocidade e o volume
 efetivos de cada fala e de cada trecho. Se aparecer `1.00x` sem ganho, aquele
 preset não está fazendo nada ali.
 
+### Raiva e agressividade
+
+Escala de três degraus:
+
+| Preset | O que faz |
+|---|---|
+| `raivoso` | rápido e cortado — **só prosódia**, sinal intacto |
+| `revoltado` | mais rápido e alto, voz já começando a forçar |
+| `furioso` | **muito raivoso**: gritado e esgoelado |
+
+```
+[Singer](emotion=furioso) I said get up right now!
+[Singer] Normal again. <furioso>MOVE!<neutro> Thanks.
+```
+
+**Por que aqui o sinal é processado.** O Kokoro não grita — as vozes são
+embeddings fixos, sem esforço vocal, tensão de prega ou fonação pressionada.
+Nenhuma manipulação de velocidade produz isso. O que dá para fazer é
+reproduzir os *correlatos acústicos* do grito, que são exatamente o que um
+técnico de som faz para um vocal cortar:
+
+- **compressão forte** — voz gritada é densa e pressionada;
+- **saturação** — o esforço vocal gera harmônicos;
+- **energia em 2–5 kHz** — onde vive a agressividade;
+- **corte de graves** antes e depois da distorção.
+
+Ao contrário do deslocamento de tom, nada disso mexe nos formantes: continua
+sendo a mesma voz, só que esgoelada.
+
+Medido no áudio final, com "Igualar volume" ligado:
+
+| | duração | nível | energia 2–6 kHz |
+|---|---|---|---|
+| neutro | 3,07 s | −20,0 dB | 0,0103 |
+| raivoso | 2,60 s | −15,5 dB | 0,0116 |
+| revoltado | 2,48 s | −14,0 dB | 0,0353 |
+| furioso | 2,36 s | −12,5 dB | **0,0624** |
+
+A **agressividade** também é um controle independente (0 a 100%, ou
+`agressividade=0.8` no roteiro): dá para esgoelar qualquer voz sem escolher um
+preset de raiva, ou suavizar o `furioso` se ficar demais.
+
 ### Trocar de tom no meio da fala
 
 Uma tag `<tom>` troca o tom dali em diante, até a próxima tag ou o fim da fala.
@@ -287,6 +329,7 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | `brightness` | `brilho` | -18 – 18 | agudos |
 | `emotion` | `emocao` | nome | preset de tom de voz |
 | `emotion_intensity` | `forca` | 0 – 1 | o quanto o preset pesa |
+| `aggression` | `agressividade` | 0 – 1 | grito/esgoelamento |
 | `effect` | `efeito` | nome | efeito de voz |
 | `effect_amount` | `intensidade` | 0 – 1 | intensidade do efeito |
 
@@ -347,7 +390,7 @@ app/
   effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               307 testes
+tests/               345 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

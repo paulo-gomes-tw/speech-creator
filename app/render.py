@@ -34,6 +34,7 @@ class VoiceSetting:
     brightness: float = 0.0       # dB de shelf agudo
     emotion: str = "neutro"       # preset de prosodia (ver app/emotions.py)
     emotion_intensity: float = 1.0  # 0 a 1: quanto o preset pesa
+    aggression: float | None = None  # 0 a 1; None usa a do preset de tom
     effect: str = "nenhum"        # efeito de voz (ver app/effects.py)
     effect_amount: float | None = None  # 0 a 1; None usa o padrao do efeito
     params: dict = field(default_factory=dict)
@@ -246,6 +247,12 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
             continue
         trecho.pop()  # o respiro sobrando no fim do trecho
         audio_trecho = np.concatenate(trecho).astype(np.float32)
+
+        # Agressao vocal: compressao, saturacao e agudos, que sao os correlatos
+        # acusticos do grito. Vem antes do volume para o ganho do preset incidir
+        # sobre o resultado ja esgoelado.
+        if span_setting.aggression:
+            audio_trecho = A.aggression(audio_trecho, sr, span_setting.aggression)
 
         # Entre trechos so entra a diferenca RELATIVA de volume; o nivel da fala
         # inteira e aplicado depois da normalizacao, mais abaixo.

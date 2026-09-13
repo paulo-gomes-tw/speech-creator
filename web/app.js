@@ -137,7 +137,7 @@ function syncCast(speakers) {
         speaker: sp, engine: "kokoro", voice: defaults[i % defaults.length],
         ref_audio: null, speed: 1, pitch: 0, volume: 0, gap: null,
         warmth: 0, brightness: 0, emotion: "neutro", emotion_intensity: 1,
-        effect: "nenhum", effect_amount: null, params: {},
+        aggression: null, effect: "nenhum", effect_amount: null, params: {},
       };
     }
   });
@@ -189,6 +189,12 @@ function renderTimeline(linhas) {
 }
 
 // ---------------------------------------------------------------- elenco
+
+// Agressividade que o preset de tom traz, ja dosada pela força da emoção.
+const emotionAggression = (c) => {
+  const e = state.emotions.find((x) => x.id === c.emotion);
+  return (e?.aggression ?? 0) * (c.emotion_intensity ?? 1);
+};
 
 const effectDefault = (id) => state.effects.find((e) => e.id === id)?.default_amount ?? 0.75;
 
@@ -274,7 +280,7 @@ function renderCast() {
           </label>
         </div>`}
 
-        <div class="four">
+        <div class="five">
           <label class="field">
             <span>Tom de voz</span>
             <select data-f="emotion" data-sp="${esc(sp)}">
@@ -286,6 +292,17 @@ function renderCast() {
             <span>Força da emoção <b class="slider-val">${Math.round((c.emotion_intensity ?? 1) * 100)}%</b></span>
             <input type="range" data-f="emotion_intensity" data-sp="${esc(sp)}" min="0" max="1" step="0.05"
                    value="${c.emotion_intensity ?? 1}" ${c.emotion === "neutro" ? "disabled" : ""}>
+          </label>
+          <label class="field">
+            <span>
+              Agressividade
+              <b class="slider-val">${Math.round((c.aggression ?? emotionAggression(c)) * 100)}%${c.aggression === null ? " (preset)" : ""}</b>
+            </span>
+            <div class="row tight">
+              <input type="range" data-f="aggression" data-sp="${esc(sp)}" min="0" max="1" step="0.05"
+                     value="${c.aggression ?? emotionAggression(c)}" style="flex:1">
+              <button class="small ghost" data-resetagg="${esc(sp)}" title="Voltar ao valor do preset">↺</button>
+            </div>
           </label>
           <label class="field">
             <span>Efeito</span>
@@ -351,6 +368,14 @@ function renderCast() {
 
   host.querySelectorAll("[data-preview]").forEach((btn) => {
     btn.onclick = (ev) => { ev.stopPropagation(); previewSpeaker(btn.dataset.preview, btn); };
+  });
+
+  host.querySelectorAll("[data-resetagg]").forEach((btn) => {
+    btn.onclick = () => {
+      state.cast[btn.dataset.resetagg].aggression = null;
+      renderCast();
+      toast("Agressividade voltou ao valor do preset.");
+    };
   });
 
   host.querySelectorAll("[data-resetgap]").forEach((btn) => {

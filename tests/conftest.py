@@ -38,13 +38,32 @@ class FakeEngine(Engine):
     def synth(self, req: SynthRequest) -> np.ndarray:
         if "BOOM" in req.text:
             raise EngineError("falha proposital de sintese")
+
         seconds = max(0.25, len(req.text) / 14.0) / max(req.speed, 0.1)
-        t = np.linspace(0, seconds, int(seconds * self.sample_rate), endpoint=False)
-        # Frequencia derivada da voz, para vozes diferentes soarem diferentes.
-        freq = 110.0 + (sum(map(ord, req.voice)) % 12) * 20.0
-        wave = 0.35 * np.sin(2 * np.pi * freq * t) + 0.12 * np.sin(2 * np.pi * freq * 3 * t)
-        envelope = np.minimum(1.0, np.minimum(t / 0.05, (seconds - t) / 0.05))
-        return (wave * np.clip(envelope, 0, 1)).astype(np.float32)
+        sr = self.sample_rate
+        t = np.linspace(0, seconds, int(seconds * sr), endpoint=False)
+
+        # Fundamental derivada da voz, para vozes diferentes soarem diferentes.
+        f0 = 110.0 + (sum(map(ord, req.voice)) % 12) * 20.0
+        fase = 2 * np.pi * np.cumsum(f0 * (1 + 0.04 * np.sin(2 * np.pi * 4 * t))) / sr
+
+        # Harmonicos moldados por tres formantes: sem isso o sinal e quase uma
+        # senoide pura, sem faixa dinamica nem agudos — e os testes de
+        # compressao e agressao passariam a medir ruido numerico.
+        wave = np.zeros_like(t)
+        for n in range(1, 36):
+            fr = f0 * n
+            ganho = sum(a / (1 + ((fr - fc) / bw) ** 2)
+                        for a, fc, bw in ((1.0, 700, 130), (0.5, 1200, 160), (0.35, 2600, 220)))
+            wave += ganho * np.sin(n * fase) / n
+
+        pico = float(np.max(np.abs(wave))) or 1.0
+        wave = wave / pico * 0.7
+
+        # Dinamica de silabas (~4 Hz) mais uma rampa curta nas bordas.
+        silabas = np.clip(np.abs(np.sin(2 * np.pi * 4.0 * t)) ** 1.5, 0.05, 1.0)
+        bordas = np.clip(np.minimum(t / 0.03, (seconds - t) / 0.03), 0.0, 1.0)
+        return (wave * silabas * bordas).astype(np.float32)
 
 
 @pytest.fixture(scope="session", autouse=True)

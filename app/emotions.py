@@ -49,6 +49,13 @@ class Emotion:
     warmth_delta: float = 0.0
     brightness_delta: float = 0.0
 
+    # --- agressao vocal (0 a 1) ---
+    # O Kokoro nao grita: as vozes sao embeddings fixos, sem esforco vocal.
+    # Aqui se reproduzem os correlatos acusticos do grito — compressao,
+    # saturacao e energia nos agudos —, que e o que um tecnico de som faz para
+    # um vocal cortar. Nao mexe nos formantes, entao a voz continua a mesma.
+    aggression: float = 0.0
+
     # --- expressividade do Chatterbox, que tem emocao nativa ---
     exaggeration: float | None = None
     cfg_weight: float | None = None
@@ -74,11 +81,19 @@ EMOTIONS: tuple[Emotion, ...] = (
     ),
     Emotion(
         "revoltado", "Revoltado",
-        "Raiva sem freio: mais rapido ainda, atropelando as pausas.",
+        "Raiva sem freio: rapido, alto e com a voz ja comecando a forcar.",
         speed_mult=1.24, contour=(1.02, 1.18), clause_pause=0.0,
         punctuation="emphatic", volume_delta=6.0, gap_mult=0.50,
-        brightness_delta=3.0,
+        brightness_delta=3.0, aggression=0.40,
         exaggeration=1.7, cfg_weight=0.32,
+    ),
+    Emotion(
+        "furioso", "Furioso (muito raivoso)",
+        "O topo da escala: gritado, esgoelado e atropelando tudo.",
+        speed_mult=1.30, contour=(1.05, 1.24), clause_pause=0.0,
+        punctuation="clipped", volume_delta=7.5, gap_mult=0.42,
+        brightness_delta=3.0, aggression=0.85,
+        exaggeration=2.0, cfg_weight=0.25,
     ),
     Emotion(
         "indiferente", "Indiferente",
@@ -141,7 +156,9 @@ BY_ID: dict[str, Emotion] = {e.id: e for e in EMOTIONS}
 DEFAULT = "neutro"
 
 ALIASES = {
-    "angry": "raivoso", "outraged": "revoltado", "furious": "revoltado",
+    "angry": "raivoso", "outraged": "revoltado",
+    "furious": "furioso", "enraged": "furioso", "rage": "furioso",
+    "shouting": "furioso", "screaming": "furioso", "muito_raivoso": "furioso",
     "indifferent": "indiferente", "flat": "indiferente", "deadpan": "indiferente",
     "tired": "cansado", "exhausted": "cansado",
     "excited": "animado", "happy": "animado",
@@ -183,6 +200,9 @@ def apply(settings: dict, emotion_id: str | None, intensity: float = 1.0) -> dic
     for campo, delta in (("warmth", emotion.warmth_delta), ("brightness", emotion.brightness_delta)):
         limitado = max(-MAX_EQ_DB, min(MAX_EQ_DB, delta))
         out[campo] = round(float(out.get(campo, 0.0)) + limitado * k, 4)
+
+    if out.get("aggression") is None:
+        out["aggression"] = round(emotion.aggression * k, 4)
 
     gap = out.get("gap")
     if gap is not None:

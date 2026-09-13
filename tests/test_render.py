@@ -42,8 +42,21 @@ def test_volume_aplica_ganho():
     opts = RenderOptions(normalize=False)
     cue = Cue(kind="speech", text="Testing one two three")
     base, _ = render_cue(cue, fake_setting(), opts)
-    alto, _ = render_cue(cue, fake_setting(volume=6.0), opts)
-    assert np.max(np.abs(alto)) == pytest.approx(np.max(np.abs(base)) * 2, rel=0.05)
+    baixo, _ = render_cue(cue, fake_setting(volume=-6.0), opts)
+    assert np.max(np.abs(baixo)) == pytest.approx(np.max(np.abs(base)) / 2, rel=0.05)
+
+
+def test_limitador_segura_ganho_excessivo():
+    """O ganho nao pode estourar: as falas soltas sao gravadas antes do
+    limitador do mix, entao cada uma leva o seu."""
+    opts = RenderOptions(normalize=False)
+    cue = Cue(kind="speech", text="Testing one two three")
+    base, _ = render_cue(cue, fake_setting(), opts)
+    alto, _ = render_cue(cue, fake_setting(volume=12.0), opts)
+
+    assert np.max(np.abs(alto)) <= 1.0
+    # Mais alto que o original, mas bem abaixo dos 4x que o ganho pediria.
+    assert np.max(np.abs(base)) < np.max(np.abs(alto)) < np.max(np.abs(base)) * 4
 
 
 def test_normalizacao_iguala_vozes_diferentes():
@@ -485,3 +498,70 @@ def test_nada_estoura_o_teto_com_preset_alto():
         wav, _ = render_cue(Cue(kind="speech", text="Get up on your feet right now"),
                             fake_setting(emotion=emocao, volume=6.0), opts)
         assert np.max(np.abs(wav)) <= 1.0, emocao
+
+
+def test_escala_de_raiva_e_audivel_no_pipeline(tmp_path):
+    """raivoso -> revoltado -> furioso, medido no audio que sai."""
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="Get up on your feet right now, I said move!")
+
+    saidas = {}
+    for emocao in ("neutro", "raivoso", "revoltado", "furioso"):
+        wav, sr = render_cue(cue, fake_setting(emotion=emocao), opts())
+        saidas[emocao] = (A.duration(wav, sr), _rms_db(wav), A.crest_factor_db(wav))
+
+    # Cada degrau e mais rapido e mais alto que o anterior.
+    duracoes = [saidas[e][0] for e in ("neutro", "raivoso", "revoltado", "furioso")]
+    niveis = [saidas[e][1] for e in ("neutro", "raivoso", "revoltado", "furioso")]
+    assert duracoes == sorted(duracoes, reverse=True), duracoes
+    assert niveis == sorted(niveis), niveis
+
+    # Furioso tem de ser inconfundivel ao lado do neutro.
+    assert saidas["furioso"][1] > saidas["neutro"][1] + 5.0
+
+
+def _mordida(x: np.ndarray, sr: int = 24000) -> float:
+    """Fracao da energia entre 2 e 6 kHz — onde vive o esforco vocal.
+
+    E a medida certa para agressao: mais confiavel que crest factor, que aqui
+    e mascarado pela normalizacao e pelo limitador do fim da cadeia.
+    """
+    spec = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
+    freqs = np.fft.rfftfreq(len(x), 1 / sr)
+    return float(spec[(freqs >= 2000) & (freqs < 6000)].sum() / max(spec.sum(), 1e-12))
+
+
+def test_agressao_so_age_nos_presets_que_pedem():
+    """Raivoso e so prosodia; furioso processa o sinal."""
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="Get up on your feet right now")
+
+    limpo, sr = render_cue(cue, fake_setting(emotion="raivoso"), opts())
+    bruto, _ = render_cue(cue, fake_setting(emotion="furioso"), opts())
+    assert _mordida(bruto, sr) > _mordida(limpo, sr) * 3.0
+
+
+def test_agressividade_manual_em_qualquer_tom():
+    """O controle e independente: da para esgoelar sem escolher um preset."""
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="Get up on your feet right now")
+
+    normal, sr = render_cue(cue, fake_setting(emotion="neutro"), opts())
+    forcada, _ = render_cue(cue, fake_setting(emotion="neutro", aggression=0.9), opts())
+    assert _mordida(forcada, sr) > _mordida(normal, sr) * 3.0
+
+
+def test_mordida_cresce_ao_longo_da_escala():
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="Get up on your feet right now, I said move!")
+    valores = [_mordida(render_cue(cue, fake_setting(emotion=e), opts())[0])
+               for e in ("neutro", "raivoso", "revoltado", "furioso")]
+    assert valores == sorted(valores), valores
+    assert valores[-1] > valores[0] * 4.0
+
+
+def test_agressao_na_linha_e_na_tag(tmp_path):
+    m = render_script("[A](agressividade=0.8) Get up now\n[A] <furioso>I said move!",
+                      cast_for("A"), RenderOptions(per_line_files=False), tmp_path / "a")
+    assert m["errors"] == []
+    assert len(m["lines"]) == 2
