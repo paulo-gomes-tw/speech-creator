@@ -282,3 +282,30 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 
 /* Trechos de sintaxe na dica nao devem quebrar no meio. */
 .card .hint code { white-space: nowrap; }
+
+/* ---------- projetos ---------- */
+
+.proj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.proj-chip b { color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.proj-chip.dirty { border-color: var(--accent-2); }
+.proj-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.proj-chip.dirty .dot { background: var(--accent-2); }
+
+.proj-item { align-items: flex-start; }
+.proj-item.current { background: #251d1c; margin: 0 -8px; padding: 9px 8px; border-radius: 8px; }
+.proj-actions { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+.ghost-file { display: inline-flex; }

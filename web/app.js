@@ -11,6 +11,9 @@ const state = {
   job: null,
   poll: null,
   projectId: null,
+  projectName: "Show sem título",
+  savedSnapshot: null,
+  projects: [],
   ffmpeg: false,
   previewAudio: null,
 };
@@ -122,6 +125,7 @@ async function parseScript() {
       : '<span class="empty">Nenhum falante detectado.</span>';
 
     renderTimeline(r.timeline);
+    renderProjectState();
     if (r.warnings.length) toast(r.warnings[0]);
   } catch (e) {
     toast(e.message, true);
@@ -646,60 +650,220 @@ async function cancelJob() {
 
 // ---------------------------------------------------------------- projetos
 
-$("btn-save").onclick = async () => {
-  const cleanCast = {};
-  for (const [k, v] of Object.entries(state.cast)) { const { _open, ...rest } = v; cleanCast[k] = rest; }
+// Retrato do que esta na tela, para comparar com o que foi salvo. As chaves
+// vao em ordem fixa: JSON.stringify preserva a ordem de insercao, e sem isso
+// uma reordenacao acusaria alteracao inexistente.
+function snapshot() {
+  const cast = {};
+  for (const nome of Object.keys(state.cast).sort()) {
+    const { _open, ...resto } = state.cast[nome];
+    cast[nome] = resto;
+  }
+  return JSON.stringify({
+    name: $("opt-name").value,
+    script: $("script").value,
+    cast,
+    options: collectOptions(),
+  });
+}
+
+const isDirty = () => state.savedSnapshot !== null && snapshot() !== state.savedSnapshot;
+
+function markSaved() {
+  state.savedSnapshot = snapshot();
+  renderProjectState();
+}
+
+function renderProjectState() {
+  const sujo = isDirty();
+  const chip = $("current-project");
+  const nome = $("opt-name").value || "Sem título";
+
+  chip.className = "proj-chip" + (sujo ? " dirty" : "");
+  chip.innerHTML = state.projectId
+    ? `<span class="dot"></span><b>${esc(nome)}</b>${sujo ? " •" : ""}`
+    : `<span class="dot" style="background:var(--muted)"></span><b>${esc(nome)}</b> (não salvo)`;
+
+  const estado = $("save-state");
+  if (estado) {
+    estado.textContent = !state.projectId
+      ? "Projeto ainda não salvo — clique em Salvar para guardá-lo."
+      : sujo
+        ? "Há alterações não salvas."
+        : "Tudo salvo.";
+    estado.style.color = sujo || !state.projectId ? "var(--accent-2)" : "var(--muted)";
+  }
+
+  renderProjectList();
+}
+
+// Chamado antes de qualquer acao que descarta o que esta na tela.
+function confirmarDescarte(acao) {
+  if (!isDirty()) return true;
+  return confirm(`Há alterações não salvas em "${$("opt-name").value}".\n\n${acao} assim mesmo?`);
+}
+
+function carregarNaTela(p) {
+  state.projectId = p.id;
+  $("opt-name").value = p.name;
+  $("script").value = p.script || "";
+  state.cast = p.cast || {};
+  applyOptions(p.options || {});
+  return parseScript().then(markSaved);
+}
+
+$("btn-new").onclick = async () => {
+  if (!confirmarDescarte("Criar um projeto novo")) return;
   try {
-    const saved = await api("/api/projects", {
-      method: "POST",
-      body: JSON.stringify({
-        id: state.projectId, name: $("opt-name").value,
-        script: $("script").value, cast: cleanCast, options: collectOptions(),
-      }),
-    });
-    state.projectId = saved.id;
-    toast(`Projeto "${saved.name}" salvo.`);
-    loadProjects();
+    const nome = prompt("Nome do novo projeto:", "Novo show");
+    if (nome === null) return;
+    const p = await api("/api/projects/new", { method: "POST", body: JSON.stringify({ name: nome }) });
+    await carregarNaTela(p);
+    await loadProjects();
+    document.querySelector('[data-view="roteiro"]').click();
+    toast(`Projeto "${p.name}" criado.`);
   } catch (e) { toast(e.message, true); }
 };
 
+async function salvar(comoNovo = false) {
+  const cast = {};
+  for (const [k, v] of Object.entries(state.cast)) { const { _open, ...resto } = v; cast[k] = resto; }
+  const corpo = {
+    id: comoNovo ? null : state.projectId,
+    name: $("opt-name").value,
+    script: $("script").value,
+    cast,
+    options: collectOptions(),
+  };
+  const p = await api("/api/projects", { method: "POST", body: JSON.stringify(corpo) });
+  state.projectId = p.id;
+  $("opt-name").value = p.name;
+  markSaved();
+  await loadProjects();
+  return p;
+}
+
+$("btn-save").onclick = async () => {
+  try { const p = await salvar(); toast(`"${p.name}" salvo.`); }
+  catch (e) { toast(e.message, true); }
+};
+
+$("btn-save-as").onclick = async () => {
+  const nome = prompt("Salvar como — nome do novo projeto:", `${$("opt-name").value} (cópia)`);
+  if (nome === null) return;
+  $("opt-name").value = nome;
+  try { const p = await salvar(true); toast(`"${p.name}" criado.`); }
+  catch (e) { toast(e.message, true); }
+};
+
 $("btn-refresh-projects").onclick = loadProjects;
+$("project-search").addEventListener("input", renderProjectList);
+
+$("btn-import").onclick = () => $("import-file").click();
+$("import-file").addEventListener("change", async (ev) => {
+  const arquivo = ev.target.files[0];
+  if (!arquivo) return;
+  const fd = new FormData();
+  fd.append("file", arquivo);
+  try {
+    const p = await api("/api/projects/import", { method: "POST", body: fd });
+    await loadProjects();
+    toast(`"${p.name}" importado.`);
+  } catch (e) { toast(e.message, true); }
+  ev.target.value = "";
+});
 
 async function loadProjects() {
   try {
     const { projects } = await api("/api/projects");
-    $("project-list").innerHTML = projects.length ? projects.map((p) => `
-      <div class="proj-item">
-        <div style="flex:1">
-          <div class="pname">${esc(p.name)}</div>
-          <div class="pmeta">${p.speakers.length} falantes · ${p.characters} caracteres · ${new Date(p.updated_at * 1000).toLocaleString("pt-BR")}</div>
-        </div>
-        <button class="small" onclick="openProject('${p.id}')">Abrir</button>
-        <button class="small danger" onclick="deleteProject('${p.id}')">Excluir</button>
-      </div>`).join("") : '<div class="empty">Nenhum projeto salvo ainda.</div>';
+    state.projects = projects;
+    renderProjectList();
   } catch (e) { toast(e.message, true); }
 }
 
-async function openProject(id) {
+function renderProjectList() {
+  const host = $("project-list");
+  if (!host) return;
+
+  const filtro = ($("project-search")?.value || "").toLowerCase().trim();
+  const lista = state.projects.filter((p) =>
+    !filtro || p.name.toLowerCase().includes(filtro) ||
+    p.speakers.some((sp) => sp.toLowerCase().includes(filtro)));
+
+  if (!lista.length) {
+    host.innerHTML = `<div class="empty">${state.projects.length ? "Nenhum projeto com esse filtro." : "Nenhum projeto salvo ainda."}</div>`;
+    return;
+  }
+
+  host.innerHTML = lista.map((p) => {
+    const atual = p.id === state.projectId;
+    const quando = new Date(p.updated_at * 1000).toLocaleString("pt-BR");
+    const dur = p.estimated_seconds ? ` · ~${fmtTime(p.estimated_seconds)}` : "";
+    return `
+    <div class="proj-item ${atual ? "current" : ""}">
+      <div style="flex:1;min-width:0">
+        <div class="pname">${esc(p.name)} ${atual ? '<span class="badge b">aberto</span>' : ""}</div>
+        <div class="pmeta">${p.lines} falas · ${p.speakers.length} falantes${dur} · ${quando}</div>
+        ${p.speakers.length ? `<div class="pmeta">${p.speakers.slice(0, 6).map(esc).join(", ")}${p.speakers.length > 6 ? "…" : ""}</div>` : ""}
+      </div>
+      <div class="proj-actions">
+        <button class="small" onclick="abrirProjeto('${p.id}')">Abrir</button>
+        <button class="small ghost" onclick="duplicarProjeto('${p.id}')">Duplicar</button>
+        <button class="small ghost" onclick="renomearProjeto('${p.id}')">Renomear</button>
+        <a href="/api/projects/${p.id}/export" download><button class="small ghost">Exportar</button></a>
+        <button class="small danger" onclick="excluirProjeto('${p.id}')">Excluir</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function abrirProjeto(id) {
+  if (id === state.projectId && !isDirty()) {
+    return document.querySelector('[data-view="roteiro"]').click();
+  }
+  if (!confirmarDescarte("Abrir outro projeto")) return;
   try {
-    const p = await api(`/api/projects/${id}`);
-    state.projectId = p.id;
-    $("opt-name").value = p.name;
-    $("script").value = p.script;
-    state.cast = p.cast || {};
-    applyOptions(p.options || {});
-    await parseScript();
+    await carregarNaTela(await api(`/api/projects/${id}`));
     document.querySelector('[data-view="roteiro"]').click();
-    toast(`Projeto "${p.name}" aberto.`);
+    toast(`"${$("opt-name").value}" aberto.`);
   } catch (e) { toast(e.message, true); }
 }
 
-async function deleteProject(id) {
-  if (!confirm("Excluir este projeto?")) return;
+async function duplicarProjeto(id) {
+  const base = state.projects.find((p) => p.id === id);
+  const nome = prompt("Nome da cópia:", `${base?.name || "Show"} (cópia)`);
+  if (nome === null) return;
+  try {
+    const p = await api(`/api/projects/${id}/duplicate`, { method: "POST", body: JSON.stringify({ name: nome }) });
+    await loadProjects();
+    toast(`"${p.name}" criado.`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function renomearProjeto(id) {
+  const base = state.projects.find((p) => p.id === id);
+  const nome = prompt("Novo nome:", base?.name || "");
+  if (nome === null || !nome.trim()) return;
+  try {
+    const p = await api(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify({ name: nome }) });
+    if (id === state.projectId) { $("opt-name").value = p.name; markSaved(); }
+    await loadProjects();
+    toast("Renomeado.");
+  } catch (e) { toast(e.message, true); }
+}
+
+async function excluirProjeto(id) {
+  const base = state.projects.find((p) => p.id === id);
+  if (!confirm(`Excluir "${base?.name || id}"? Não dá para desfazer.`)) return;
   try {
     await api(`/api/projects/${id}`, { method: "DELETE" });
-    if (state.projectId === id) state.projectId = null;
-    loadProjects();
+    if (state.projectId === id) {
+      // O que esta na tela continua ali, mas deixa de ter projeto associado.
+      state.projectId = null;
+      state.savedSnapshot = null;
+      renderProjectState();
+    }
+    await loadProjects();
     toast("Projeto excluído.");
   } catch (e) { toast(e.message, true); }
 }
@@ -714,6 +878,11 @@ function applyOptions(o) {
   for (const [k, id] of Object.entries(ranges)) if (o[k] !== undefined) { $(id).value = o[k]; $(id).dispatchEvent(new Event("input")); }
   if (o.formats) { $("fmt-wav").checked = o.formats.includes("wav"); $("fmt-mp3").checked = o.formats.includes("mp3"); }
 }
+
+// Avisa antes de fechar a aba com trabalho nao salvo.
+window.addEventListener("beforeunload", (ev) => {
+  if (isDirty()) { ev.preventDefault(); ev.returnValue = ""; }
+});
 
 // ---------------------------------------------------------------- amostras
 
@@ -796,8 +965,14 @@ async function boot() {
     toast("Falha ao carregar: " + e.message, true);
   }
 
+  $("opt-name").addEventListener("input", renderProjectState);
+
+  await loadProjects();
   $("script").value = EXAMPLE;
   await parseScript();
+  // Estado inicial: rascunho sem projeto associado.
+  state.savedSnapshot = null;
+  renderProjectState();
 }
 
 boot();

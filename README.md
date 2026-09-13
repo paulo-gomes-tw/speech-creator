@@ -343,12 +343,35 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | **Elenco** | voz, tom de voz, efeito e tratamento de cada falante, com prévia instantânea |
 | **Vozes** | ouvir as 54 vozes, com filtro por idioma e gênero |
 | **Saída** | progresso da geração, player, download do mix e de cada fala |
-| **Projetos** | salvar/abrir roteiros e enviar amostras para clonagem |
+| **Projetos** | criar, abrir, duplicar, renomear, exportar/importar e amostras para clonagem |
 
 O volume é equalizado entre as falas automaticamente (normalização RMS), então
 uma voz não sai gritando e a outra sussurrando no PA.
 
 ---
+
+## Projetos
+
+Cada projeto guarda roteiro, elenco e ajustes num arquivo em
+`data/projects/<id>.json`.
+
+| Ação | O que faz |
+|---|---|
+| **Novo projeto** | começa do zero, com um roteiro inicial em vez de página em branco |
+| **Salvar** | grava no projeto aberto |
+| **Salvar como…** | grava numa cópia nova, sem tocar no original |
+| **Duplicar** | copia um projeto salvo, independente do original |
+| **Renomear** | muda só o nome |
+| **Exportar** | baixa o `.json` — versionável no git ou enviável para a banda |
+| **Importar** | traz um `.json` exportado, sempre como projeto novo |
+| **Excluir** | apaga (sem desfazer) |
+
+O cabeçalho mostra o projeto aberto e marca com `•` quando há alterações não
+salvas. Criar, abrir ou fechar a aba com trabalho pendente pede confirmação.
+
+O formato exportado é o mesmo do arquivo salvo, então não há conversão em
+nenhuma direção. Importar nunca reaproveita o `id` do arquivo — importar duas
+vezes gera dois projetos em vez de sobrescrever um existente.
 
 ## Linha de comando
 
@@ -383,14 +406,14 @@ app/
   render.py          pipeline: síntese + pós-processamento + mixagem
   audio.py           DSP (pitch, EQ, normalização, montagem) em numpy
   jobs.py            fila de renderização com progresso
-  projects.py        persistência em JSON
+  projects.py        projetos: criar, duplicar, renomear, importar/exportar
   voices.py          catálogo das 54 vozes
   emotions.py        presets de prosódia (tom de voz)
   prosody.py         fraseado: orações, contorno de velocidade, pontuação
   effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               345 testes
+tests/               388 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

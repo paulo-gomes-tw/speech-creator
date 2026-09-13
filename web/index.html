@@ -19,6 +19,7 @@
     <div class="tab" data-view="projetos">Projetos</div>
   </nav>
   <div class="spacer"></div>
+  <span id="current-project" class="proj-chip" title="Projeto aberto"></span>
   <span id="engine-status" class="badge">verificando...</span>
   <button id="btn-render" class="primary">▶ Gerar áudio</button>
 </header>
@@ -175,11 +176,30 @@
   <!-- ============ PROJETOS ============ -->
   <section class="view" id="view-projetos">
     <div class="card">
-      <h2>Projetos salvos</h2>
-      <p class="hint">Roteiro + elenco + ajustes, guardados em <code>data/projects</code>.</p>
-      <div class="row" style="margin-bottom:14px">
-        <button id="btn-save" class="primary">💾 Salvar projeto atual</button>
-        <button id="btn-refresh-projects" class="ghost">Atualizar lista</button>
+      <h2>Projetos</h2>
+      <p class="hint">
+        Roteiro, elenco e ajustes, guardados em <code>data/projects</code>.
+        Exportar gera um <code>.json</code> que pode ser versionado ou mandado
+        para outra pessoa da banda.
+      </p>
+      <div class="row" style="margin-bottom:6px">
+        <button id="btn-new" class="primary">＋ Novo projeto</button>
+        <button id="btn-save">💾 Salvar</button>
+        <button id="btn-save-as" class="ghost">Salvar como…</button>
+        <div class="spacer" style="flex:1"></div>
+        <label class="ghost-file">
+          <input type="file" id="import-file" accept=".json" hidden>
+          <button id="btn-import" class="ghost">⬆ Importar .json</button>
+        </label>
+        <button id="btn-refresh-projects" class="ghost small">Atualizar</button>
+      </div>
+      <div id="save-state" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Salvos</h2>
+      <div class="row" style="margin-bottom:12px">
+        <input id="project-search" placeholder="Filtrar por nome ou falante…" style="flex:1">
       </div>
       <div id="project-list"></div>
     </div>

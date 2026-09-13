@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from pathlib import Path
@@ -26,6 +27,11 @@ app = FastAPI(title="Speech Creator", version="1.0.0")
 MAX_PREVIEW_CHARS = 600
 MAX_REF_BYTES = 25 * 1024 * 1024
 ALLOWED_REF_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+
+
+@app.exception_handler(projects.ProjectError)
+async def project_error_handler(_request: Request, exc: projects.ProjectError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.exception_handler(EngineError)
@@ -219,30 +225,74 @@ def api_projects() -> dict:
 
 @app.post("/api/projects")
 async def api_project_save(payload: dict) -> dict:
-    try:
-        return projects.save(payload, payload.get("id"))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    """Grava um projeto. Sem `id`, cria um novo."""
+    return projects.save(payload, payload.get("id"))
+
+
+@app.post("/api/projects/new")
+async def api_project_new(payload: dict | None = None) -> dict:
+    """Cria um projeto do zero, com um roteiro inicial."""
+    payload = payload or {}
+    return projects.create(payload.get("name"), payload)
 
 
 @app.get("/api/projects/{project_id}")
 def api_project_get(project_id: str) -> dict:
-    try:
-        data = projects.load(project_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    data = projects.load(project_id)
     if not data:
         raise HTTPException(status_code=404, detail="Projeto nao encontrado.")
     return data
 
 
+@app.patch("/api/projects/{project_id}")
+async def api_project_rename(project_id: str, payload: dict) -> dict:
+    name = (payload or {}).get("name", "")
+    if not str(name).strip():
+        raise HTTPException(status_code=400, detail="O nome nao pode ficar vazio.")
+    return projects.rename(project_id, str(name))
+
+
+@app.post("/api/projects/{project_id}/duplicate")
+async def api_project_duplicate(project_id: str, payload: dict | None = None) -> dict:
+    return projects.duplicate(project_id, (payload or {}).get("name"))
+
+
+@app.get("/api/projects/{project_id}/export")
+def api_project_export(project_id: str) -> Response:
+    """Baixa o projeto como JSON — o mesmo formato aceito na importacao."""
+    data = projects.load(project_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Projeto nao encontrado.")
+
+    nome = re.sub(r"[^\w\- ]", "", data.get("name", "projeto")).strip() or "projeto"
+    return Response(
+        content=json.dumps(data, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{nome}.json"'},
+    )
+
+
+@app.post("/api/projects/import")
+async def api_project_import(file: UploadFile = File(...)) -> dict:
+    """Importa um projeto exportado, sempre como um projeto novo."""
+    if not (file.filename or "").lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .json exportado daqui.")
+
+    conteudo = await file.read(2 * 1024 * 1024 + 1)
+    if len(conteudo) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Arquivo maior que 2 MB.")
+
+    try:
+        data = json.loads(conteudo.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"JSON invalido: {exc}") from exc
+
+    return projects.import_project(data)
+
+
 @app.delete("/api/projects/{project_id}")
 def api_project_delete(project_id: str) -> dict:
-    try:
-        ok = projects.delete(project_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not ok:
+    if not projects.delete(project_id):
         raise HTTPException(status_code=404, detail="Projeto nao encontrado.")
     return {"ok": True}
 

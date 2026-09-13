@@ -186,9 +186,73 @@ def test_ciclo_de_vida_do_projeto(client, sample_script):
     assert client.get(f"/api/projects/{pid}").status_code == 404
 
 
-def test_projeto_inexistente(client):
-    assert client.get("/api/projects/naoexiste").status_code == 404
-    assert client.delete("/api/projects/naoexiste").status_code == 404
+def test_criar_projeto_novo(client):
+    p = client.post("/api/projects/new", json={"name": "Show do sabado"}).json()
+    assert p["id"] and p["name"] == "Show do sabado"
+    assert p["script"].strip()  # vem com roteiro inicial
+
+    outro = client.post("/api/projects/new", json={"name": "Show do domingo"}).json()
+    assert outro["id"] != p["id"]
+    assert len(client.get("/api/projects").json()["projects"]) == 2
+
+
+def test_duplicar_projeto(client, sample_script):
+    p = client.post("/api/projects", json={"name": "Base", "script": sample_script}).json()
+    copia = client.post(f"/api/projects/{p['id']}/duplicate", json={"name": "Cópia"}).json()
+    assert copia["id"] != p["id"] and copia["name"] == "Cópia"
+    assert copia["script"] == sample_script
+
+
+def test_duplicar_inexistente(client):
+    assert client.post("/api/projects/naoexiste/duplicate", json={}).status_code == 400
+
+
+def test_renomear_projeto(client):
+    p = client.post("/api/projects/new", json={"name": "Antigo"}).json()
+    novo = client.patch(f"/api/projects/{p['id']}", json={"name": "Novo"}).json()
+    assert novo["name"] == "Novo" and novo["id"] == p["id"]
+
+
+def test_renomear_com_nome_vazio(client):
+    p = client.post("/api/projects/new", json={"name": "Antigo"}).json()
+    assert client.patch(f"/api/projects/{p['id']}", json={"name": "   "}).status_code == 400
+
+
+def test_exportar_projeto(client, sample_script):
+    p = client.post("/api/projects", json={"name": "Para exportar", "script": sample_script}).json()
+    res = client.get(f"/api/projects/{p['id']}/export")
+    assert res.status_code == 200
+    assert "attachment" in res.headers["content-disposition"]
+    assert res.json()["script"] == sample_script
+
+
+def test_exportar_inexistente(client):
+    assert client.get("/api/projects/naoexiste/export").status_code == 404
+
+
+def test_importar_projeto(client, sample_script):
+    import io
+    import json as _json
+
+    p = client.post("/api/projects", json={"name": "Original", "script": sample_script}).json()
+    conteudo = client.get(f"/api/projects/{p['id']}/export").content
+
+    res = client.post("/api/projects/import",
+                      files={"file": ("show.json", io.BytesIO(conteudo), "application/json")})
+    assert res.status_code == 200
+    importado = res.json()
+    assert importado["id"] != p["id"]
+    assert importado["script"] == sample_script
+    assert len(client.get("/api/projects").json()["projects"]) == 2
+
+
+def test_importar_arquivo_invalido(client):
+    import io
+
+    assert client.post("/api/projects/import",
+                       files={"file": ("x.txt", io.BytesIO(b"{}"), "text/plain")}).status_code == 400
+    assert client.post("/api/projects/import",
+                       files={"file": ("x.json", io.BytesIO(b"nao e json"), "application/json")}).status_code == 400
 
 
 def test_id_de_projeto_malicioso(client):
