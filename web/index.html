@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speech Creator</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎙️</text></svg>">
+</head>
+<body>
+
+<header>
+  <h1>🎙️ Speech <span>Creator</span></h1>
+  <nav class="tabs">
+    <div class="tab active" data-view="roteiro">Roteiro</div>
+    <div class="tab" data-view="elenco">Elenco</div>
+    <div class="tab" data-view="vozes">Vozes</div>
+    <div class="tab" data-view="saida">Saída</div>
+    <div class="tab" data-view="projetos">Projetos</div>
+  </nav>
+  <div class="spacer"></div>
+  <span id="engine-status" class="badge">verificando...</span>
+  <button id="btn-render" class="primary">▶ Gerar áudio</button>
+</header>
+
+<main>
+
+  <!-- ============ ROTEIRO ============ -->
+  <section class="view active" id="view-roteiro">
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Roteiro do show</h2>
+          <p class="hint">
+            Uma fala por marcador: <code>[Narrator] Good evening!</code> ·
+            pausa: <code>[pause 2]</code> ·
+            ajuste na linha: <code>[MC](speed=1.1, pitch=-2) ...</code>
+          </p>
+          <textarea id="script" spellcheck="false"></textarea>
+          <div class="row" style="margin-top:10px">
+            <button id="btn-example" class="ghost small">Carregar exemplo</button>
+            <button id="btn-clear" class="ghost small">Limpar</button>
+            <div class="spacer"></div>
+            <div class="stats" id="script-stats"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Ajustes do show</h2>
+          <p class="hint">Valem para a mixagem final.</p>
+
+          <label class="field">
+            <span>Nome do projeto</span>
+            <input id="opt-name" placeholder="Show no Estúdio X" value="Show sem título">
+          </label>
+
+          <div class="two">
+            <label class="field">
+              <span>Silêncio no início <b class="slider-val" id="v-leadin">0.5s</b></span>
+              <input type="range" id="opt-leadin" min="0" max="10" step="0.1" value="0.5">
+            </label>
+            <label class="field">
+              <span>Silêncio no fim <b class="slider-val" id="v-leadout">1.0s</b></span>
+              <input type="range" id="opt-leadout" min="0" max="10" step="0.1" value="1">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Pausa padrão entre falas <b class="slider-val" id="v-gap">0.6s</b></span>
+            <input type="range" id="opt-gap" min="0" max="5" step="0.05" value="0.6">
+          </label>
+
+          <label class="field">
+            <span>Volume alvo por fala <b class="slider-val" id="v-target">-20 dB</b></span>
+            <input type="range" id="opt-target" min="-32" max="-8" step="1" value="-20">
+          </label>
+
+          <div class="row" style="margin:12px 0">
+            <label class="row tight"><input type="checkbox" id="opt-normalize" checked> Igualar volume</label>
+            <label class="row tight"><input type="checkbox" id="opt-trim" checked> Cortar silêncio</label>
+            <label class="row tight"><input type="checkbox" id="opt-limit" checked> Limitador</label>
+          </div>
+
+          <label class="field">
+            <span>Formatos de saída</span>
+            <div class="row">
+              <label class="row tight"><input type="checkbox" id="fmt-wav" checked> WAV</label>
+              <label class="row tight"><input type="checkbox" id="fmt-mp3"> MP3 <span id="mp3-note" class="badge"></span></label>
+              <label class="row tight"><input type="checkbox" id="opt-perline" checked> Arquivo por fala</label>
+            </div>
+          </label>
+        </div>
+
+        <div class="card">
+          <h2>Falantes detectados</h2>
+          <p class="hint">Cada um vira uma entrada no Elenco.</p>
+          <div id="speaker-chips" class="row"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ELENCO ============ -->
+  <section class="view" id="view-elenco">
+    <div class="card">
+      <h2>Elenco</h2>
+      <p class="hint">
+        Defina a voz e o tratamento de cada falante. <b>Ouvir</b> gera uma amostra
+        na hora, com os ajustes atuais aplicados.
+      </p>
+      <div id="cast-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ VOZES ============ -->
+  <section class="view" id="view-vozes">
+    <div class="card">
+      <h2>Biblioteca de vozes</h2>
+      <p class="hint">Clique numa voz para ouvir. O texto abaixo é usado na amostra.</p>
+      <div class="row" style="margin-bottom:12px">
+        <select id="voice-lang" style="max-width:230px"></select>
+        <select id="voice-gender" style="max-width:150px">
+          <option value="">Todos os gêneros</option>
+          <option value="feminina">Feminina</option>
+          <option value="masculina">Masculina</option>
+        </select>
+        <input id="preview-text" style="flex:1;min-width:220px" value="Good evening! Are you ready to make some noise tonight?">
+      </div>
+      <div id="voice-grid" class="voice-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ SAIDA ============ -->
+  <section class="view" id="view-saida">
+    <div class="card">
+      <h2>Renderização</h2>
+      <div id="job-area"><div class="empty">Nenhuma renderização ainda. Clique em <b>Gerar áudio</b>.</div></div>
+    </div>
+    <div class="card" id="job-lines-card" style="display:none">
+      <h2>Falas geradas</h2>
+      <p class="hint">Cada fala também fica disponível separada, para montar no seu DAW.</p>
+      <div id="job-lines"></div>
+    </div>
+  </section>
+
+  <!-- ============ PROJETOS ============ -->
+  <section class="view" id="view-projetos">
+    <div class="card">
+      <h2>Projetos salvos</h2>
+      <p class="hint">Roteiro + elenco + ajustes, guardados em <code>data/projects</code>.</p>
+      <div class="row" style="margin-bottom:14px">
+        <button id="btn-save" class="primary">💾 Salvar projeto atual</button>
+        <button id="btn-refresh-projects" class="ghost">Atualizar lista</button>
+      </div>
+      <div id="project-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Amostras para clonagem</h2>
+      <p class="hint">
+        Áudio de referência para o motor Chatterbox (7 a 20 segundos, voz limpa,
+        sem música ao fundo).
+      </p>
+      <div class="row" style="margin-bottom:12px">
+        <input type="file" id="ref-file" accept=".wav,.mp3,.flac,.ogg,.m4a" style="max-width:340px">
+        <button id="btn-upload-ref">Enviar amostra</button>
+      </div>
+      <div id="ref-list"></div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

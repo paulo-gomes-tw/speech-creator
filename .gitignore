@@ -1,0 +1,15 @@
+# Dados gerados pela aplicacao
+data/
+*.wav
+*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Modelos baixados
+.cache/

@@ -1,0 +1,12 @@
+# Motor de sintese principal (Apache-2.0)
+kokoro>=0.9.4
+soundfile>=0.12
+
+# Servidor web
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+
+# Processamento de audio
+numpy>=1.24
+scipy>=1.11

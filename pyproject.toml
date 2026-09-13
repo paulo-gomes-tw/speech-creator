@@ -1,0 +1,29 @@
+[project]
+name = "speech-creator"
+version = "1.0.0"
+description = "Gerador de speeches e dialogos com vozes de IA, para shows ao vivo"
+requires-python = ">=3.10"
+dependencies = [
+    "kokoro>=0.9.4",
+    "soundfile>=0.12",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "numpy>=1.24",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+# Clonagem de voz a partir de uma amostra
+cloning = ["chatterbox-tts>=0.1.1"]
+# Idiomas com G2P proprio
+ja = ["misaki[ja]"]
+zh = ["misaki[zh]"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+speech-creator = "app.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
