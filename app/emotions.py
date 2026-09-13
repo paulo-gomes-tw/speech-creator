@@ -24,9 +24,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-# Teto do EQ nos presets. Acima disso o ouvido le como processamento, nao
-# como intencao — foi exatamente o erro da versao anterior.
-MAX_EQ_DB = 2.0
+# Teto do EQ nos presets. Ate aqui e movimento de mixagem; foi o exagero
+# (+6 dB) que soava processado, nao o recurso em si.
+MAX_EQ_DB = 3.0
 
 
 @dataclass(frozen=True)
@@ -67,72 +67,72 @@ EMOTIONS: tuple[Emotion, ...] = (
     Emotion(
         "raivoso", "Raivoso",
         "Rapido e cortado, acelerando: frases curtas, quase sem respiro.",
-        speed_mult=1.10, contour=(1.0, 1.10), clause_pause=0.0,
-        punctuation="clipped", volume_delta=3.5, gap_mult=0.65,
-        brightness_delta=1.5,
+        speed_mult=1.18, contour=(1.0, 1.14), clause_pause=0.0,
+        punctuation="clipped", volume_delta=4.5, gap_mult=0.60,
+        brightness_delta=2.5,
         exaggeration=1.3, cfg_weight=0.4,
     ),
     Emotion(
         "revoltado", "Revoltado",
         "Raiva sem freio: mais rapido ainda, atropelando as pausas.",
-        speed_mult=1.16, contour=(1.02, 1.14), clause_pause=0.0,
-        punctuation="emphatic", volume_delta=5.0, gap_mult=0.55,
-        brightness_delta=2.0,
+        speed_mult=1.24, contour=(1.02, 1.18), clause_pause=0.0,
+        punctuation="emphatic", volume_delta=6.0, gap_mult=0.50,
+        brightness_delta=3.0,
         exaggeration=1.7, cfg_weight=0.32,
     ),
     Emotion(
         "indiferente", "Indiferente",
         "Sem investimento: ritmo constante, nenhuma variacao, pausas iguais.",
-        speed_mult=0.97, contour=(1.0,), clause_pause=0.05,
-        punctuation="none", volume_delta=-1.5, gap_mult=1.1,
-        brightness_delta=-1.5,
+        speed_mult=0.96, contour=(1.0,), clause_pause=0.08,
+        punctuation="none", volume_delta=-2.5, gap_mult=1.15,
+        brightness_delta=-2.5,
         exaggeration=0.3, cfg_weight=0.72,
     ),
     Emotion(
         "cansado", "Cansado",
         "Vai perdendo folego: comeca quase normal e vai arrastando ate o fim.",
-        speed_mult=0.86, contour=(0.98, 0.80), clause_pause=0.30,
-        punctuation="trailing", volume_delta=-3.5, gap_mult=1.5,
-        warmth_delta=1.0, brightness_delta=-2.0,
+        speed_mult=0.78, contour=(1.0, 0.72), clause_pause=0.45,
+        punctuation="trailing", volume_delta=-5.0, gap_mult=1.60,
+        warmth_delta=1.5, brightness_delta=-3.0,
         exaggeration=0.35, cfg_weight=0.65,
     ),
     Emotion(
         "animado", "Animado",
         "Empolgado: rapido e crescendo, pausas curtas.",
-        speed_mult=1.13, contour=(1.0, 1.08), clause_pause=0.0,
-        punctuation="emphatic", volume_delta=2.5, gap_mult=0.75,
-        brightness_delta=1.5,
+        speed_mult=1.20, contour=(1.0, 1.10), clause_pause=0.0,
+        punctuation="emphatic", volume_delta=3.5, gap_mult=0.70,
+        brightness_delta=2.5,
         exaggeration=1.2, cfg_weight=0.45,
     ),
     Emotion(
         "sombrio", "Sombrio",
         "Deliberado e pesado: lento, com silencio entre as oracoes.",
-        speed_mult=0.89, contour=(0.96, 0.90), clause_pause=0.35,
-        punctuation="none", volume_delta=-0.5, gap_mult=1.35,
-        warmth_delta=2.0, brightness_delta=-1.5,
+        speed_mult=0.84, contour=(0.96, 0.88), clause_pause=0.50,
+        punctuation="none", volume_delta=-1.0, gap_mult=1.40,
+        warmth_delta=3.0, brightness_delta=-2.5,
         exaggeration=0.6, cfg_weight=0.6,
     ),
     Emotion(
         "sarcastico", "Sarcastico",
         "Arrastado de proposito, com uma quebra no meio.",
-        speed_mult=0.92, contour=(0.92, 1.04), clause_pause=0.25,
-        punctuation="hesitant", volume_delta=-1.0, gap_mult=1.25,
+        speed_mult=0.88, contour=(0.88, 1.06), clause_pause=0.35,
+        punctuation="hesitant", volume_delta=-1.5, gap_mult=1.30,
         exaggeration=0.9, cfg_weight=0.55,
     ),
     Emotion(
         "sussurrado", "Sussurrado",
         "Baixo e contido, sem projecao.",
-        speed_mult=0.94, contour=(1.0,), clause_pause=0.15,
-        punctuation="trailing", volume_delta=-9.0, gap_mult=1.2,
-        warmth_delta=-1.5, brightness_delta=1.0,
+        speed_mult=0.92, contour=(1.0,), clause_pause=0.20,
+        punctuation="trailing", volume_delta=-11.0, gap_mult=1.25,
+        warmth_delta=-2.5, brightness_delta=1.5,
         exaggeration=0.4, cfg_weight=0.7,
     ),
     Emotion(
         "epico", "Epico",
         "Locutor de arena: cada oracao separada, com peso.",
-        speed_mult=0.88, contour=(0.94, 0.90), clause_pause=0.45,
-        punctuation="none", volume_delta=1.5, gap_mult=1.35,
-        warmth_delta=2.0,
+        speed_mult=0.82, contour=(0.94, 0.88), clause_pause=0.60,
+        punctuation="none", volume_delta=2.5, gap_mult=1.40,
+        warmth_delta=3.0,
         exaggeration=0.8, cfg_weight=0.5,
     ),
 )

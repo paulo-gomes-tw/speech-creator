@@ -157,18 +157,34 @@ function renderTimeline(linhas) {
     return;
   }
   const total = linhas.reduce((a, l) => a + l.gap, 0);
-  $("timeline").innerHTML = linhas.map((l, i) => `
+
+  // Mostra o que o preset efetivamente muda: se um trecho aparece com 1.00x e
+  // 0 dB, aquele tom nao esta fazendo nada ali.
+  const efeito = (t) =>
+    `${t.speed.toFixed(2)}x` + (Math.abs(t.volume) >= 0.1 ? ` · ${t.volume > 0 ? "+" : ""}${t.volume.toFixed(1)} dB` : "");
+
+  $("timeline").innerHTML = linhas.map((l, i) => {
+    const trechos = l.spans && l.spans.length > 1
+      ? l.spans.map((t) => `<div class="txt">↳ <b>${esc(t.emotion)}</b> ${efeito(t)} — ${esc(t.text.slice(0, 50))}${t.text.length > 50 ? "…" : ""}</div>`).join("")
+      : "";
+    return `
     <div class="line-item">
       <span class="idx">${String(i + 1).padStart(2, "0")}</span>
       <div>
-        <div class="who">${esc(l.speaker)}${l.emotion && l.emotion !== "neutro" ? ` <span class="badge b">${esc(l.emotion)}</span>` : ""}</div>
+        <div class="who">
+          ${esc(l.speaker)}
+          ${l.emotion && l.emotion !== "neutro" ? `<span class="badge b">${esc(l.emotion)}</span>` : ""}
+          ${(l.spans?.length ?? 1) === 1 ? `<span class="badge">${efeito(l)}</span>` : ""}
+        </div>
         <div class="txt">${esc(l.text.slice(0, 70))}${l.text.length > 70 ? "…" : ""}</div>
+        ${trechos}
       </div>
       <div style="text-align:right">
         <div class="who">${l.gap.toFixed(2)}s</div>
         <div class="txt">${esc(l.source)}</div>
       </div>
-    </div>`).join("") +
+    </div>`;
+  }).join("") +
     `<div class="stats" style="margin-top:10px"><span>Silêncio somado entre falas: <b>${total.toFixed(1)}s</b></span></div>`;
 }
 

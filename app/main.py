@@ -293,5 +293,18 @@ def api_ref_delete(name: str) -> dict:
 # Interface
 # --------------------------------------------------------------------------
 
+@app.middleware("http")
+async def no_cache_da_interface(request: Request, call_next):
+    """Faz o navegador revalidar a interface a cada carga.
+
+    Sem isso um app.js em cache continua rodando depois de um `git pull`, e o
+    usuario ve a versao antiga sem nenhum sinal de que esta desatualizada.
+    """
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 if config.WEB_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(config.WEB_DIR), html=True), name="web")

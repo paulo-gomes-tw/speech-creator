@@ -114,14 +114,23 @@ def test_pausa_antes_da_primeira_fala_vira_silencio_inicial(tmp_path):
 # ---------------------------------------------------------------- emocao
 
 
-@pytest.mark.parametrize("emocao,mult", [("neutro", 1.0), ("raivoso", 0.65), ("cansado", 1.5)])
-def test_emocao_molda_a_pausa_do_falante(tmp_path, emocao, mult):
+def mult_de(emocao: str) -> float:
+    """Multiplicador declarado pelo preset, para o teste nao repetir a constante."""
+    from app import emotions
+
+    return emotions.resolve(emocao).gap_mult
+
+
+@pytest.mark.parametrize("emocao", ["neutro", "raivoso", "cansado"])
+def test_emocao_molda_a_pausa_do_falante(tmp_path, emocao):
+    mult = mult_de(emocao)
     silencios = renderiza(tmp_path, DUAS_FALAS, {"A": fx(gap=1.0, emotion=emocao)}, opts())
     assert any(abs(s - mult) < 0.1 for s in silencios), (emocao, silencios)
 
 
-@pytest.mark.parametrize("emocao,mult", [("neutro", 1.0), ("raivoso", 0.65), ("cansado", 1.5)])
-def test_emocao_molda_tambem_a_pausa_herdada(tmp_path, emocao, mult):
+@pytest.mark.parametrize("emocao", ["neutro", "raivoso", "cansado"])
+def test_emocao_molda_tambem_a_pausa_herdada(tmp_path, emocao):
+    mult = mult_de(emocao)
     """Regressao: o gap_mult so era aplicado quando o falante tinha pausa
     propria. Como a interface cria todo falante herdando a pausa do show, o
     ajuste de pausa da emocao nunca acontecia na pratica."""
@@ -131,14 +140,16 @@ def test_emocao_molda_tambem_a_pausa_herdada(tmp_path, emocao, mult):
 
 
 def test_forca_da_emocao_dosa_a_pausa(tmp_path):
+    cheio_esperado = mult_de("cansado")
+    meio_esperado = 1.0 + (cheio_esperado - 1.0) * 0.5
     cheio = renderiza(tmp_path, DUAS_FALAS, {"A": fx(gap=None, emotion="cansado", emotion_intensity=1.0)},
                       opts(default_gap=1.0), "cheio")
     meio = renderiza(tmp_path, DUAS_FALAS, {"A": fx(gap=None, emotion="cansado", emotion_intensity=0.5)},
                      opts(default_gap=1.0), "meio")
     zero = renderiza(tmp_path, DUAS_FALAS, {"A": fx(gap=None, emotion="cansado", emotion_intensity=0.0)},
                      opts(default_gap=1.0), "zero")
-    assert any(abs(s - 1.50) < 0.1 for s in cheio), cheio
-    assert any(abs(s - 1.25) < 0.1 for s in meio), meio
+    assert any(abs(s - cheio_esperado) < 0.1 for s in cheio), cheio
+    assert any(abs(s - meio_esperado) < 0.1 for s in meio), meio
     assert any(abs(s - 1.00) < 0.1 for s in zero), zero
 
 
@@ -200,5 +211,5 @@ def test_previa_mostra_o_multiplicador_do_tom():
     from app.render import timeline
 
     previsto = timeline(DUAS_FALAS, {"A": fx(gap=None, emotion="cansado")}, opts(default_gap=1.0))
-    assert previsto[0]["gap"] == pytest.approx(1.5, abs=0.01)
+    assert previsto[0]["gap"] == pytest.approx(mult_de("cansado"), abs=0.01)
     assert "Cansado" in previsto[0]["source"]

@@ -151,14 +151,30 @@ def timeline(
                     pendente["source"] = "marcador [pause]"
             continue
 
-        setting = _resolve(cast.get(cue.speaker, fallback), cue.overrides)
+        raw = cast.get(cue.speaker, fallback)
+        setting = _resolve(raw, cue.overrides)
         gap, origem = effective_gap(cue, setting, opts)
+
+        # Trechos com tom proprio, para a interface mostrar o que muda onde.
+        trechos = []
+        for span in prosody.split_spans(cue.text, setting.emotion, setting.emotion_intensity):
+            span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
+            trechos.append({
+                "emotion": emotions.resolve(span.emotion).id,
+                "text": span.text,
+                "speed": round(span_setting.speed, 3),
+                "volume": round(span_setting.volume, 2),
+            })
+
         pendente = {
             "index": cue.index,
             "speaker": cue.speaker,
             "text": cue.text,
             "line_no": cue.line_no,
             "emotion": setting.emotion,
+            "speed": round(setting.speed, 3),
+            "volume": round(setting.volume, 2),
+            "spans": trechos,
             "gap": round(gap, 3),
             "source": origem,
         }
@@ -231,10 +247,11 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
         trecho.pop()  # o respiro sobrando no fim do trecho
         audio_trecho = np.concatenate(trecho).astype(np.float32)
 
-        # Volume e timbre variam por tom, entao sao aplicados por trecho. A
-        # normalizacao da fala inteira, mais abaixo, preserva a relacao entre eles.
-        if abs(span_setting.volume) > 1e-3:
-            audio_trecho = A.apply_gain_db(audio_trecho, span_setting.volume)
+        # Entre trechos so entra a diferenca RELATIVA de volume; o nivel da fala
+        # inteira e aplicado depois da normalizacao, mais abaixo.
+        delta = span_setting.volume - setting.volume
+        if abs(delta) > 1e-3:
+            audio_trecho = A.apply_gain_db(audio_trecho, delta)
         if abs(span_setting.warmth) > 1e-3 or abs(span_setting.brightness) > 1e-3:
             audio_trecho = A.tone(audio_trecho, sr, span_setting.warmth, span_setting.brightness)
 
@@ -253,9 +270,17 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
     if setting.effect and setting.effect != effects.DEFAULT:
         out = effects.apply(out, sr, setting.effect, setting.effect_amount)
     if opts.normalize:
-        # Normaliza a fala inteira: as diferencas de volume entre os trechos
-        # sao relativas, entao sobrevivem.
+        # "Igualar volume" existe para emparelhar vozes diferentes, nao para
+        # apagar dinamica proposital. Por isso a normalizacao vem ANTES dos
+        # ganhos deliberados: aplicada depois, ela zerava por completo o volume
+        # dos presets de tom — sussurrado e revoltado saiam no mesmo nivel.
         out = A.rms_normalize(out, opts.target_dbfs)
+
+    if abs(setting.volume) > 1e-3:
+        out = A.apply_gain_db(out, setting.volume)
+    # Um preset alto sobre uma fala ja normalizada pode passar do teto; o
+    # limitador do mix final so age depois, e as falas soltas sao gravadas antes.
+    out = A.soft_limit(out, -0.5)
 
     out = A.fade(out, sr)
 

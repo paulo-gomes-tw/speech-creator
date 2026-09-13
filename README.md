@@ -173,6 +173,16 @@ Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
 referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
 o preset também ajusta `exaggeration` e `cfg_weight`.
 
+> **"Igualar volume" e os presets.** A normalização acontece *antes* dos ganhos
+> deliberados (seu slider de volume e o do preset). Ela existe para emparelhar
+> vozes diferentes, não para apagar dinâmica proposital — aplicada depois, ela
+> zerava o volume de todas as emoções, e sussurrado saía no mesmo nível de
+> revoltado.
+
+O painel de **linha do tempo** (aba Roteiro) mostra a velocidade e o volume
+efetivos de cada fala e de cada trecho. Se aparecer `1.00x` sem ganho, aquele
+preset não está fazendo nada ali.
+
 ### Trocar de tom no meio da fala
 
 Uma tag `<tom>` troca o tom dali em diante, até a próxima tag ou o fim da fala.
@@ -337,7 +347,7 @@ app/
   effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               294 testes
+tests/               307 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

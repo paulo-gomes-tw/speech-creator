@@ -413,3 +413,75 @@ def test_trechos_nao_quebram_a_fala_sem_tag(tmp_path):
     b = render_script("[A] Good evening everyone, welcome to the show tonight.",
                       {"A": fake_setting(speaker="A", emotion="neutro")}, opts(), tmp_path / "b")
     assert a["duration"] == pytest.approx(b["duration"], abs=0.01)
+
+
+# ------------------------------------------------- o tom precisa ser audivel
+
+
+def _rms_db(x) -> float:
+    return A.lin_to_db(float(np.sqrt(np.mean(x**2))))
+
+
+def test_volume_do_tom_sobrevive_a_normalizacao():
+    """Regressao: `rms_normalize` rodava depois do ganho do preset e zerava o
+    volume de todas as emocoes. Como "Igualar volume" vem ligado por padrao na
+    interface, sussurrado e revoltado saiam exatamente no mesmo nivel."""
+    opts = RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="We drove eight hours to get here tonight")
+
+    alto, _ = render_cue(cue, fake_setting(emotion="revoltado"), opts)
+    normal, _ = render_cue(cue, fake_setting(emotion="neutro"), opts)
+    baixo, _ = render_cue(cue, fake_setting(emotion="sussurrado"), opts)
+
+    assert _rms_db(alto) > _rms_db(normal) + 3.0
+    assert _rms_db(baixo) < _rms_db(normal) - 5.0
+
+
+def test_igualar_volume_continua_emparelhando_vozes():
+    """A normalizacao nao pode ter deixado de fazer o seu trabalho: duas vozes
+    no mesmo tom ainda precisam sair no mesmo nivel."""
+    opts = RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="We drove eight hours to get here tonight")
+    a, _ = render_cue(cue, fake_setting(voice="af_heart"), opts)
+    b, _ = render_cue(cue, fake_setting(voice="am_michael"), opts)
+    assert abs(_rms_db(a) - _rms_db(b)) < 1.0
+
+
+def test_diferenca_entre_tons_e_grande_o_bastante_para_ouvir():
+    """Nao basta ser diferente: precisa ser *perceptivelmente* diferente.
+
+    Uma versao anterior mudava so ~8% na velocidade, o que passava num teste de
+    desigualdade mas nao se ouvia como emocao.
+    """
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="We drove eight hours to get here, so you better be loud tonight.")
+
+    raiva, sr = render_cue(cue, fake_setting(emotion="raivoso"), opts())
+    cansado, _ = render_cue(cue, fake_setting(emotion="cansado"), opts())
+
+    dur_raiva, dur_cansado = A.duration(raiva, sr), A.duration(cansado, sr)
+    assert dur_cansado > dur_raiva * 1.4, (dur_raiva, dur_cansado)
+    assert _rms_db(raiva) > _rms_db(cansado) + 5.0
+
+
+@pytest.mark.parametrize("emocao", ["raivoso", "revoltado", "cansado", "indiferente",
+                                    "animado", "sombrio", "sarcastico", "sussurrado", "epico"])
+def test_todo_preset_muda_algo_de_forma_mensuravel(emocao):
+    opts = lambda: RenderOptions(normalize=True, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="We drove eight hours to get here, so you better be loud tonight.")
+
+    neutro, sr = render_cue(cue, fake_setting(emotion="neutro"), opts())
+    alvo, _ = render_cue(cue, fake_setting(emotion=emocao), opts())
+
+    dur = abs(A.duration(alvo, sr) - A.duration(neutro, sr)) / A.duration(neutro, sr)
+    vol = abs(_rms_db(alvo) - _rms_db(neutro))
+    # Pelo menos 8% de diferenca de duracao ou 2 dB de nivel.
+    assert dur > 0.08 or vol > 2.0, (emocao, round(dur, 3), round(vol, 2))
+
+
+def test_nada_estoura_o_teto_com_preset_alto():
+    opts = RenderOptions(normalize=True, trim=False, per_line_files=False)
+    for emocao in ("revoltado", "raivoso", "animado", "epico"):
+        wav, _ = render_cue(Cue(kind="speech", text="Get up on your feet right now"),
+                            fake_setting(emotion=emocao, volume=6.0), opts)
+        assert np.max(np.abs(wav)) <= 1.0, emocao
