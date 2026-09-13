@@ -146,6 +146,8 @@ label.field > span { display: block; font-size: 11px; color: var(--muted); margi
 
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.four { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 860px) { .four, .three { grid-template-columns: 1fr 1fr; } }
 
 input[type="range"] { padding: 0; height: 22px; accent-color: var(--accent); background: transparent; border: none; }
 input[type="checkbox"] { width: auto; accent-color: var(--accent); }

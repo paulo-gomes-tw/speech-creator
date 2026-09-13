@@ -10,7 +10,7 @@ from typing import Callable
 import numpy as np
 
 from . import audio as A
-from . import config, effects, emotions
+from . import config, effects, emotions, prosody
 from .engines import EngineError, get_engine
 from .script_parser import Cue, parse_script, split_long_text
 
@@ -33,6 +33,7 @@ class VoiceSetting:
     warmth: float = 0.0           # dB de shelf grave
     brightness: float = 0.0       # dB de shelf agudo
     emotion: str = "neutro"       # preset de prosodia (ver app/emotions.py)
+    emotion_intensity: float = 1.0  # 0 a 1: quanto o preset pesa
     effect: str = "nenhum"        # efeito de voz (ver app/effects.py)
     effect_amount: float | None = None  # 0 a 1; None usa o padrao do efeito
     params: dict = field(default_factory=dict)
@@ -81,7 +82,8 @@ def _resolve(setting: VoiceSetting, overrides: dict[str, float | str]) -> VoiceS
     3. os ajustes numericos escritos na propria linha, que sao absolutos.
     """
     emotion_id = overrides.get("emotion", setting.emotion)
-    merged = emotions.apply(setting.to_dict(), emotion_id)
+    intensity = overrides.get("emotion_intensity", setting.emotion_intensity)
+    merged = emotions.apply(setting.to_dict(), emotion_id, float(intensity))
 
     for key, value in overrides.items():
         if key != "emotion" and key in merged:
@@ -113,30 +115,40 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
 
     from .engines.base import SynthRequest
 
+    # O preset molda o fraseado ANTES da sintese: cada oracao vai ao modelo com
+    # a sua propria velocidade e pontuacao. E assim que a emocao entra sem
+    # tocar no sinal depois — a voz continua sendo a mesma voz.
+    emotion = emotions.resolve(setting.emotion)
+    k = max(0.0, min(1.0, float(setting.emotion_intensity)))
+    respiro = emotion.clause_pause * k
+
     pieces: list[np.ndarray] = []
     for chunk in split_long_text(cue.text):
-        part = engine.synth(
-            SynthRequest(
-                text=chunk,
-                voice=setting.voice,
-                speed=setting.speed,
-                lang=setting.lang,
-                ref_audio=setting.ref_audio,
-                params=setting.params or {},
+        for texto, velocidade in prosody.plan(
+            chunk, setting.speed, emotion.contour, emotion.punctuation, k
+        ):
+            part = engine.synth(
+                SynthRequest(
+                    text=texto,
+                    voice=setting.voice,
+                    speed=velocidade,
+                    lang=setting.lang,
+                    ref_audio=setting.ref_audio,
+                    params=setting.params or {},
+                )
             )
-        )
-        if len(part):
-            pieces.append(part)
+            if len(part):
+                pieces.append(part)
 
     if not pieces:
         return np.zeros(0, dtype=np.float32), sr
 
-    # Emenda os pedacos com uma respiracao curta, para nao soar colado.
+    # Emenda com uma respiracao curta; o preset pode alongar esse respiro.
     joined: list[np.ndarray] = []
     for i, piece in enumerate(pieces):
         joined.append(piece)
         if i < len(pieces) - 1:
-            joined.append(A.silence(0.12, sr))
+            joined.append(A.silence(0.12 + respiro, sr))
     out = np.concatenate(joined).astype(np.float32)
 
     if opts.trim:

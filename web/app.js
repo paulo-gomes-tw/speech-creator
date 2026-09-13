@@ -129,8 +129,8 @@ function syncCast(speakers) {
       state.cast[sp] = {
         speaker: sp, engine: "kokoro", voice: defaults[i % defaults.length],
         ref_audio: null, speed: 1, pitch: 0, volume: 0, gap: null,
-        warmth: 0, brightness: 0, emotion: "neutro", effect: "nenhum",
-        effect_amount: null, params: {},
+        warmth: 0, brightness: 0, emotion: "neutro", emotion_intensity: 1,
+        effect: "nenhum", effect_amount: null, params: {},
       };
     }
   });
@@ -228,12 +228,18 @@ function renderCast() {
           </label>
         </div>`}
 
-        <div class="three">
+        <div class="four">
           <label class="field">
             <span>Tom de voz</span>
             <select data-f="emotion" data-sp="${esc(sp)}">
               ${state.emotions.map((e) => `<option value="${e.id}" ${c.emotion === e.id ? "selected" : ""} title="${esc(e.description)}">${esc(e.name)}</option>`).join("")}
             </select>
+            <div class="hint" style="margin:6px 0 0">${esc(state.emotions.find((e) => e.id === c.emotion)?.description || "")}</div>
+          </label>
+          <label class="field">
+            <span>Força da emoção <b class="slider-val">${Math.round((c.emotion_intensity ?? 1) * 100)}%</b></span>
+            <input type="range" data-f="emotion_intensity" data-sp="${esc(sp)}" min="0" max="1" step="0.05"
+                   value="${c.emotion_intensity ?? 1}" ${c.emotion === "neutro" ? "disabled" : ""}>
           </label>
           <label class="field">
             <span>Efeito</span>

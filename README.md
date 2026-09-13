@@ -128,23 +128,50 @@ sombrio, sarcástico, sussurrado, épico**.
 
 ```
 [MC](emotion=raivoso) You call that loud?!
-[Roadie](emocao=cansado) Two more shows this week.
+[Roadie](emocao=cansado, forca=0.6) Two more shows this week.
 ```
 
-**Como funciona, sem marketing:** o Kokoro não tem emoção nativa — as vozes são
-embeddings fixos, sem parâmetro de estado emocional. Os presets moldam a
-**prosódia**: velocidade, tom, intensidade e brilho, que são as marcas
-mensuráveis de cada emoção (raiva acelera, sobe o tom e joga energia nos
-agudos; cansaço faz o oposto e alonga as pausas). O resultado lê como a emoção
-certa, mas **não é atuação**.
+**Como funciona — e por que não distorce.** Emoção na fala é ritmo, ênfase e
+fraseado, não deslocamento de frequência. Então os presets agem **antes da
+síntese**, mudando o que o modelo recebe:
+
+| Lever | O que faz |
+|---|---|
+| velocidade | parâmetro nativo do Kokoro — o modelo re-sintetiza, sem artefato |
+| contorno | cada oração vai com a sua velocidade (acelerar, perder fôlego) |
+| respiro | silêncio entre as orações |
+| pontuação | reescrita que o G2P repassa ao modelo e muda a entonação |
+| volume | ganho limpo |
+
+Exemplo real do que o modelo recebe, para
+`"We drove eight hours to get here, so you better be loud tonight."`:
+
+```
+RAIVOSO    1.05x  We drove eight hours to get here.
+           1.15x  So you better be loud tonight!          (respiro 0.0s)
+
+CANSADO    0.95x  We drove eight hours to get here,
+           0.77x  so you better be loud tonight...        (respiro 0.3s)
+
+ÉPICO      0.90x  We drove eight hours to get here,
+           0.86x  so you better be loud tonight.          (respiro 0.45s)
+```
+
+**Nenhum preset mexe no tom (pitch).** Deslocar o tom com phase vocoder arrasta
+os formantes junto, e formante é o que define a identidade de uma voz — o
+resultado não soa como a mesma pessoa com raiva, soa como voz distorcida. Pelo
+mesmo motivo o EQ dos presets é limitado a ±2 dB. O controle de pitch continua
+disponível como ajuste manual, para quem quiser pagar esse preço
+conscientemente.
+
+A **força da emoção** (0 a 100%, ou `forca=` no roteiro) dosa o quanto o preset
+pesa. Em 0% o preset não tem efeito nenhum.
+
+Os presets são **relativos**: um personagem configurado grave continua grave.
 
 Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
-referência já falada naquela emoção — ele copia a entrega do áudio de
-referência. Nesse caso o preset também ajusta `exaggeration` e `cfg_weight`, os
-parâmetros de expressividade do modelo.
-
-Os presets são **relativos**, não absolutos: um personagem configurado grave
-continua grave quando fica com raiva.
+referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
+o preset também ajusta `exaggeration` e `cfg_weight`.
 
 ## Efeitos de voz
 
@@ -211,6 +238,7 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | `warmth` | `calor` | -18 – 18 | graves |
 | `brightness` | `brilho` | -18 – 18 | agudos |
 | `emotion` | `emocao` | nome | preset de tom de voz |
+| `emotion_intensity` | `forca` | 0 – 1 | o quanto o preset pesa |
 | `effect` | `efeito` | nome | efeito de voz |
 | `effect_amount` | `intensidade` | 0 – 1 | intensidade do efeito |
 
@@ -267,10 +295,11 @@ app/
   projects.py        persistência em JSON
   voices.py          catálogo das 54 vozes
   emotions.py        presets de prosódia (tom de voz)
+  prosody.py         fraseado: orações, contorno de velocidade, pontuação
   effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               209 testes
+tests/               246 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

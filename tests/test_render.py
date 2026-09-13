@@ -254,13 +254,38 @@ def test_emocao_na_linha_vence_a_do_falante(tmp_path):
     assert rapido["duration"] < lento["duration"]
 
 
-def test_ajuste_numerico_vence_a_emocao(tmp_path):
-    """(speed=...) e absoluto e ignora o multiplicador do preset."""
-    opts = lambda: RenderOptions(normalize=False, per_line_files=False, lead_in=0, lead_out=0)
-    cast = {"A": fake_setting(speaker="A")}
-    a = render_script("[A](emotion=raivoso, speed=1.0) one two three", cast, opts(), tmp_path / "a")
-    b = render_script("[A](emotion=cansado, speed=1.0) one two three", cast, opts(), tmp_path / "b")
-    assert a["duration"] == pytest.approx(b["duration"], rel=0.02)
+def test_ajuste_numerico_vence_a_emocao():
+    """(speed=...) e absoluto e ignora o multiplicador do preset.
+
+    O resto do preset (fraseado, pontuacao, volume) continua valendo: travar a
+    velocidade nao e o mesmo que desligar a emocao.
+    """
+    from app.render import _resolve
+
+    raiva = _resolve(fake_setting(), {"emotion": "raivoso", "speed": 1.0})
+    cansaco = _resolve(fake_setting(), {"emotion": "cansado", "speed": 1.0})
+    assert raiva.speed == 1.0 and cansaco.speed == 1.0
+    assert raiva.volume > cansaco.volume  # o preset ainda diferencia os dois
+
+
+def test_intensidade_dosa_a_emocao():
+    from app.render import _resolve
+
+    cheio = _resolve(fake_setting(emotion="cansado", emotion_intensity=1.0), {})
+    meio = _resolve(fake_setting(emotion="cansado", emotion_intensity=0.5), {})
+    zero = _resolve(fake_setting(emotion="cansado", emotion_intensity=0.0), {})
+    assert cheio.speed < meio.speed < zero.speed
+    assert zero.speed == 1.0 and zero.volume == 0.0  # intensidade 0 = sem efeito
+
+
+def test_preset_nunca_altera_o_tom():
+    """A regressao que motivou a reescrita: mexer no pitch arrastava os
+    formantes e descaracterizava a voz."""
+    from app.render import _resolve
+
+    for emocao in [e.id for e in __import__("app.emotions", fromlist=["x"]).EMOTIONS]:
+        resolvido = _resolve(fake_setting(pitch=-3.0), {"emotion": emocao})
+        assert resolvido.pitch == -3.0, emocao
 
 
 def test_emocao_preserva_o_timbre_do_personagem(tmp_path):

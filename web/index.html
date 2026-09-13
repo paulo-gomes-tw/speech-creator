@@ -112,13 +112,15 @@
         na hora, com os ajustes atuais aplicados.
       </p>
       <div class="msg warn" style="margin-bottom:14px">
-        <b>Sobre o tom de voz:</b> o Kokoro não tem emoção nativa — os presets
-        moldam a <i>prosódia</i> (velocidade, tom, intensidade, brilho), o que lê
-        como a emoção certa mas não é atuação. Para emoção atuada de verdade, use
-        o motor <b>Chatterbox</b> com uma amostra de referência já falada naquela
-        emoção; aí o preset também ajusta a expressividade do modelo.
-        Os <b>efeitos</b> (robô, megafone, rádio) são processamento de sinal e
-        saem idênticos em qualquer motor.
+        <b>Tom de voz</b> muda o <i>fraseado</i>, não o sinal: cada oração vai
+        ao modelo com a sua própria velocidade, respiro e pontuação. A voz
+        continua sendo a mesma voz — nenhum preset mexe no tom (pitch), porque
+        deslocar o tom arrasta os formantes e descaracteriza o timbre. Se ficar
+        forte demais, baixe a <b>força da emoção</b>.
+        Para emoção atuada de verdade, use o motor <b>Chatterbox</b> com uma
+        amostra já falada naquela emoção.<br><br>
+        <b>Efeitos</b> (robô, megafone, rádio) são outra coisa: aí o sinal
+        <i>é</i> processado de propósito.
       </div>
       <div id="cast-list"></div>
     </div>
