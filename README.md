@@ -121,6 +121,75 @@ Chatterbox no elenco. Licença MIT, também gratuito.
 
 ---
 
+## Tom de voz (emoção)
+
+Dez presets: **neutro, raivoso, revoltado, indiferente, cansado, animado,
+sombrio, sarcástico, sussurrado, épico**.
+
+```
+[MC](emotion=raivoso) You call that loud?!
+[Roadie](emocao=cansado) Two more shows this week.
+```
+
+**Como funciona, sem marketing:** o Kokoro não tem emoção nativa — as vozes são
+embeddings fixos, sem parâmetro de estado emocional. Os presets moldam a
+**prosódia**: velocidade, tom, intensidade e brilho, que são as marcas
+mensuráveis de cada emoção (raiva acelera, sobe o tom e joga energia nos
+agudos; cansaço faz o oposto e alonga as pausas). O resultado lê como a emoção
+certa, mas **não é atuação**.
+
+Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
+referência já falada naquela emoção — ele copia a entrega do áudio de
+referência. Nesse caso o preset também ajusta `exaggeration` e `cfg_weight`, os
+parâmetros de expressividade do modelo.
+
+Os presets são **relativos**, não absolutos: um personagem configurado grave
+continua grave quando fica com raiva.
+
+## Efeitos de voz
+
+Processamento de sinal — determinístico, sai idêntico em qualquer motor:
+
+| Efeito | Som |
+|---|---|
+| `robo` | robô clássico de ficção: a entonação vira zumbido metálico |
+| `androide` | sintético mas articulado, bom para falas longas |
+| `vocoder` | robô cantado, mais grave e saturado |
+| `megafone` | PA de arena, alto-falante esgoelado |
+| `radio` | transmissão AM com chiado |
+| `telefone` | faixa estreita de linha telefônica |
+| `alienigena` | timbre fora do humano |
+| `lofi` | sampler de 8 bits |
+| `coro` | várias vozes desafinadas em uníssono |
+
+```
+[Computer](effect=robo) Systems online.
+[PA](efeito=megafone, intensidade=0.9) Last call.
+```
+
+O `robo` usa robotização por fase zerada na STFT: sem a fase original, a
+energia trava numa grade harmônica fixa de 93,75 Hz, substituindo a entonação
+por um zumbido constante — e preservando os formantes, então o texto continua
+inteligível.
+
+Cada efeito tem uma **intensidade** de 0 a 100%, que mistura sinal limpo e
+processado.
+
+## Precedência dos ajustes
+
+Do mais fraco para o mais forte:
+
+1. **configuração do falante** — o timbre do personagem
+2. **preset de emoção** — aplicado como *delta* sobre ela
+3. **ajustes numéricos na linha** — absolutos, vencem tudo
+
+```
+[MC](emotion=raivoso, speed=1.0) ...
+```
+→ pega a raiva (tom, volume, brilho), mas a velocidade fica travada em 1.0.
+
+---
+
 ## Sintaxe do roteiro
 
 | Escrita | Efeito |
@@ -141,6 +210,9 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | `gap` | `pausa` | 0 – 60 | pausa depois desta fala |
 | `warmth` | `calor` | -18 – 18 | graves |
 | `brightness` | `brilho` | -18 – 18 | agudos |
+| `emotion` | `emocao` | nome | preset de tom de voz |
+| `effect` | `efeito` | nome | efeito de voz |
+| `effect_amount` | `intensidade` | 0 – 1 | intensidade do efeito |
 
 ---
 
@@ -149,7 +221,7 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | Aba | Para quê |
 |---|---|
 | **Roteiro** | escrever o texto e ajustar a mixagem do show |
-| **Elenco** | voz e tratamento de cada falante, com prévia instantânea |
+| **Elenco** | voz, tom de voz, efeito e tratamento de cada falante, com prévia instantânea |
 | **Vozes** | ouvir as 54 vozes, com filtro por idioma e gênero |
 | **Saída** | progresso da geração, player, download do mix e de cada fala |
 | **Projetos** | salvar/abrir roteiros e enviar amostras para clonagem |
@@ -194,9 +266,11 @@ app/
   jobs.py            fila de renderização com progresso
   projects.py        persistência em JSON
   voices.py          catálogo das 54 vozes
+  emotions.py        presets de prosódia (tom de voz)
+  effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               117 testes
+tests/               209 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

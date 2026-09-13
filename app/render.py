@@ -10,7 +10,7 @@ from typing import Callable
 import numpy as np
 
 from . import audio as A
-from . import config
+from . import config, effects, emotions
 from .engines import EngineError, get_engine
 from .script_parser import Cue, parse_script, split_long_text
 
@@ -32,6 +32,9 @@ class VoiceSetting:
     gap: float | None = None      # pausa depois da fala; None herda o padrao do show
     warmth: float = 0.0           # dB de shelf grave
     brightness: float = 0.0       # dB de shelf agudo
+    emotion: str = "neutro"       # preset de prosodia (ver app/emotions.py)
+    effect: str = "nenhum"        # efeito de voz (ver app/effects.py)
+    effect_amount: float | None = None  # 0 a 1; None usa o padrao do efeito
     params: dict = field(default_factory=dict)
 
     @classmethod
@@ -67,13 +70,21 @@ class RenderOptions:
         return asdict(self)
 
 
-def _resolve(setting: VoiceSetting, overrides: dict[str, float]) -> VoiceSetting:
-    """Aplica os ajustes inline da linha sobre a configuracao do falante."""
-    if not overrides:
-        return setting
-    merged = setting.to_dict()
+def _resolve(setting: VoiceSetting, overrides: dict[str, float | str]) -> VoiceSetting:
+    """Combina configuracao do falante, preset de emocao e ajustes da linha.
+
+    Precedencia, do mais fraco para o mais forte:
+
+    1. a configuracao do falante (o timbre do personagem);
+    2. o preset de emocao, aplicado como *delta* sobre ela — assim um
+       personagem grave continua grave quando fica com raiva;
+    3. os ajustes numericos escritos na propria linha, que sao absolutos.
+    """
+    emotion_id = overrides.get("emotion", setting.emotion)
+    merged = emotions.apply(setting.to_dict(), emotion_id)
+
     for key, value in overrides.items():
-        if key in merged:
+        if key != "emotion" and key in merged:
             merged[key] = value
     return VoiceSetting.from_dict(merged)
 
@@ -84,7 +95,13 @@ def _safe_name(text: str) -> str:
 
 
 def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np.ndarray, int]:
-    """Sintetiza uma fala e aplica todo o pos-processamento. Devolve (audio, sr)."""
+    """Sintetiza uma fala e aplica todo o pos-processamento. Devolve (audio, sr).
+
+    Recebe a configuracao *crua* do falante e resolve emocao e ajustes da linha
+    aqui dentro, para que a previa da interface e a renderizacao completa
+    passem exatamente pelo mesmo caminho.
+    """
+    setting = _resolve(setting, cue.overrides)
     engine = get_engine(setting.engine)
     sr = engine.sample_rate
 
@@ -128,6 +145,8 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
         out = A.pitch_shift(out, sr, setting.pitch)
     if abs(setting.warmth) > 1e-3 or abs(setting.brightness) > 1e-3:
         out = A.tone(out, sr, setting.warmth, setting.brightness)
+    if setting.effect and setting.effect != effects.DEFAULT:
+        out = effects.apply(out, sr, setting.effect, setting.effect_amount)
     if opts.normalize:
         out = A.rms_normalize(out, opts.target_dbfs)
     if abs(setting.volume) > 1e-3:
@@ -190,12 +209,15 @@ def render_script(
                 lead_in += cue.seconds
             continue
 
-        setting = _resolve(cast.get(cue.speaker, fallback), cue.overrides)
+        raw = cast.get(cue.speaker, fallback)
+        # A resolvida e so para a pausa e o manifesto: quem renderiza e o
+        # render_cue, que resolve a partir da crua uma unica vez.
+        setting = _resolve(raw, cue.overrides)
         if progress:
             progress(done, total, f"{cue.speaker}: {cue.text[:60]}")
 
         try:
-            wav, sr = render_cue(cue, setting, opts)
+            wav, sr = render_cue(cue, raw, opts)
             out_sr = sr
         except EngineError as exc:
             errors.append({"index": cue.index, "speaker": cue.speaker, "line_no": cue.line_no, "error": str(exc)})
@@ -223,6 +245,8 @@ def render_script(
             "duration": round(A.duration(wav, sr), 3),
             "voice": setting.voice,
             "engine": setting.engine,
+            "emotion": setting.emotion,
+            "effect": setting.effect,
         }
         if opts.per_line_files:
             fname = f"{len(line_records) + 1:03d}_{_safe_name(cue.speaker)}.wav"

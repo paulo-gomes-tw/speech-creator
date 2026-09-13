@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import audio as A
-from . import config, projects
+from . import config, effects, emotions, projects
 from .engines import EngineError, get_engine, list_engines
 from .engines.base import SynthRequest
 from .jobs import manager
@@ -66,6 +66,18 @@ def api_voices(engine: str = "kokoro", lang: str | None = None) -> dict:
         "supports_cloning": eng.supports_cloning,
         "supports_blending": eng.supports_blending,
     }
+
+
+@app.get("/api/emotions")
+def api_emotions() -> dict:
+    """Presets de prosodia. Com o Kokoro moldam a entrega; com o Chatterbox
+    tambem ajustam a expressividade do modelo."""
+    return {"emotions": emotions.catalog(), "default": emotions.DEFAULT}
+
+
+@app.get("/api/effects")
+def api_effects() -> dict:
+    return {"effects": effects.catalog(), "default": effects.DEFAULT}
 
 
 # --------------------------------------------------------------------------

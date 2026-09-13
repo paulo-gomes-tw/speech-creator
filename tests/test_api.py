@@ -233,3 +233,42 @@ def test_amostra_inexistente(client):
 def test_interface_e_servida(client):
     res = client.get("/")
     assert res.status_code == 200 and "Speech" in res.text
+
+
+# ------------------------------------------------------ tom de voz e efeitos
+
+
+def test_lista_emocoes(client):
+    data = client.get("/api/emotions").json()
+    ids = {e["id"] for e in data["emotions"]}
+    assert {"raivoso", "indiferente", "cansado", "revoltado"} <= ids
+    assert data["default"] == "neutro"
+    assert all(e["name"] and e["description"] for e in data["emotions"])
+
+
+def test_lista_efeitos(client):
+    data = client.get("/api/effects").json()
+    ids = {e["id"] for e in data["effects"]}
+    assert {"robo", "megafone", "telefone"} <= ids
+    assert data["default"] == "nenhum"
+
+
+def test_preview_com_emocao_e_efeito(client):
+    res = client.post("/api/preview", json={
+        "text": "You call that loud?",
+        "setting": {"engine": "fake", "voice": "af_heart", "emotion": "raivoso", "effect": "robo"},
+    })
+    assert res.status_code == 200 and res.content[:4] == b"RIFF"
+
+
+def test_render_com_presets_no_roteiro(client):
+    job = client.post("/api/render", json={
+        "script": "[A](emotion=raivoso) Get up!\n[B](effect=robo) Systems online.",
+        "cast": {**fake_cast("A", "B")},
+        "options": {"per_line_files": False},
+    }).json()
+    done = wait_for_job(client, job["id"])
+    assert done["status"] == "done", done.get("error")
+    linhas = done["manifest"]["lines"]
+    assert linhas[0]["emotion"] == "raivoso"
+    assert linhas[1]["effect"] == "robo"

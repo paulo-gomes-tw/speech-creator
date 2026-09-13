@@ -34,7 +34,8 @@
           <p class="hint">
             Uma fala por marcador: <code>[Narrator] Good evening!</code> ·
             pausa: <code>[pause 2]</code> ·
-            ajuste na linha: <code>[MC](speed=1.1, pitch=-2) ...</code>
+            ajustes na linha: <code>[MC](speed=1.1, pitch=-2)</code>
+            <code>(emotion=raivoso)</code> <code>(effect=robo)</code>
           </p>
           <textarea id="script" spellcheck="false"></textarea>
           <div class="row" style="margin-top:10px">
@@ -110,6 +111,15 @@
         Defina a voz e o tratamento de cada falante. <b>Ouvir</b> gera uma amostra
         na hora, com os ajustes atuais aplicados.
       </p>
+      <div class="msg warn" style="margin-bottom:14px">
+        <b>Sobre o tom de voz:</b> o Kokoro não tem emoção nativa — os presets
+        moldam a <i>prosódia</i> (velocidade, tom, intensidade, brilho), o que lê
+        como a emoção certa mas não é atuação. Para emoção atuada de verdade, use
+        o motor <b>Chatterbox</b> com uma amostra de referência já falada naquela
+        emoção; aí o preset também ajusta a expressividade do modelo.
+        Os <b>efeitos</b> (robô, megafone, rádio) são processamento de sinal e
+        saem idênticos em qualquer motor.
+      </div>
       <div id="cast-list"></div>
     </div>
   </section>

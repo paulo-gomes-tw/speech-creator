@@ -4,6 +4,8 @@ const state = {
   voices: [],
   languages: {},
   engines: [],
+  emotions: [],
+  effects: [],
   cast: {},          // falante -> configuracao
   speakers: [],
   job: null,
@@ -14,24 +16,26 @@ const state = {
 };
 
 const EXAMPLE = `# Roteiro de exemplo - abertura do show
-# [Falante] texto   |   [pause 2]   |   [Falante](speed=1.1, pitch=-2) texto
+# [Falante] texto | [pause 2] | ajustes: (speed=) (pitch=) (emotion=) (effect=)
 
-[Announcer](speed=0.95, pitch=-3) Ladies and gentlemen... please welcome to the stage... Voltage!
+[Announcer](emotion=epico) Ladies and gentlemen... please welcome to the stage... Voltage!
 
 [pause 2]
 
-[Singer] Good evening! How are you feeling tonight?
+[Singer](emotion=animado) Good evening! How are you feeling tonight?
 [Singer] We drove eight hours to get here, so you better be loud.
 
 [pause 1]
 
-[Guitarist](speed=1.1) This next one is off the new record. It's called Static Line.
+[Computer](effect=robo) Systems online. Initiating sequence.
 
-[Announcer](pitch=-4, speed=0.9) Static Line.
+[Guitarist](emotion=indiferente) This next one is off the new record.
+
+[Announcer](emotion=sombrio, effect=megafone) Static Line.
 
 [pause 1.5]
 
-[Singer] One, two, three, four!`;
+[Singer](emotion=revoltado) One, two, three, four!`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -125,7 +129,8 @@ function syncCast(speakers) {
       state.cast[sp] = {
         speaker: sp, engine: "kokoro", voice: defaults[i % defaults.length],
         ref_audio: null, speed: 1, pitch: 0, volume: 0, gap: null,
-        warmth: 0, brightness: 0, params: {},
+        warmth: 0, brightness: 0, emotion: "neutro", effect: "nenhum",
+        effect_amount: null, params: {},
       };
     }
   });
@@ -138,6 +143,8 @@ $("btn-clear").onclick = () => {
 };
 
 // ---------------------------------------------------------------- elenco
+
+const effectDefault = (id) => state.effects.find((e) => e.id === id)?.default_amount ?? 0.75;
 
 // Pausa padrao do show, usada pelos falantes que nao definiram a sua.
 const showGap = () => parseFloat($("opt-gap").value);
@@ -167,6 +174,8 @@ function renderCast() {
         <span class="caret">▾</span>
         <span class="name">${esc(sp)}</span>
         <span class="meta">${esc(voiceLabel(c.voice))}</span>
+        ${c.emotion && c.emotion !== "neutro" ? `<span class="badge b">${esc(state.emotions.find((e) => e.id === c.emotion)?.name || c.emotion)}</span>` : ""}
+        ${c.effect && c.effect !== "nenhum" ? `<span class="badge">${esc(state.effects.find((e) => e.id === c.effect)?.name || c.effect)}</span>` : ""}
         <div class="spacer" style="flex:1"></div>
         <button class="small" data-preview="${esc(sp)}">▶ Ouvir</button>
       </div>
@@ -218,6 +227,26 @@ function renderCast() {
             <input data-p="language_id" data-sp="${esc(sp)}" value="${esc(c.params?.language_id ?? "en")}" placeholder="en">
           </label>
         </div>`}
+
+        <div class="three">
+          <label class="field">
+            <span>Tom de voz</span>
+            <select data-f="emotion" data-sp="${esc(sp)}">
+              ${state.emotions.map((e) => `<option value="${e.id}" ${c.emotion === e.id ? "selected" : ""} title="${esc(e.description)}">${esc(e.name)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Efeito</span>
+            <select data-f="effect" data-sp="${esc(sp)}">
+              ${state.effects.map((e) => `<option value="${e.id}" ${c.effect === e.id ? "selected" : ""} title="${esc(e.description)}">${esc(e.name)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Intensidade do efeito <b class="slider-val">${((c.effect_amount ?? effectDefault(c.effect)) * 100).toFixed(0)}%</b></span>
+            <input type="range" data-f="effect_amount" data-sp="${esc(sp)}" min="0" max="1" step="0.05"
+                   value="${c.effect_amount ?? effectDefault(c.effect)}" ${c.effect === "nenhum" ? "disabled" : ""}>
+          </label>
+        </div>
 
         <div class="three">
           <label class="field">
@@ -309,6 +338,8 @@ function renderCast() {
         c.params[el.dataset.p] = el.type === "range" ? value : raw;
       } else {
         c[el.dataset.f] = value === "" && el.dataset.f === "ref_audio" ? null : value;
+        // Cada efeito tem a sua intensidade natural; trocar reinicia o slider.
+        if (el.dataset.f === "effect") c.effect_amount = null;
       }
       if (el.type === "range") {
         const label = el.parentElement.querySelector(".slider-val");
@@ -665,6 +696,12 @@ async function boot() {
     const status = $("engine-status");
     status.textContent = ready.length ? `${ready.map((e) => e.name).join(", ")} pronto` : "nenhum motor instalado";
     status.className = "badge " + (ready.length ? "a" : "");
+
+    const [{ emotions }, { effects }] = await Promise.all([
+      api("/api/emotions"), api("/api/effects"),
+    ]);
+    state.emotions = emotions;
+    state.effects = effects;
 
     const { voices, languages } = await api("/api/voices?engine=kokoro");
     state.voices = voices;

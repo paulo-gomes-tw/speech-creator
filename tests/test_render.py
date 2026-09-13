@@ -229,3 +229,111 @@ def test_ajuste_de_pausa_na_linha_vence_o_falante(tmp_path):
     curto = render_script("[A] one two\n[A] three", cast, opts(), tmp_path / "c")
     longo = render_script("[A](gap=4) one two\n[A] three", cast, opts(), tmp_path / "l")
     assert longo["duration"] - curto["duration"] == pytest.approx(3.9, abs=0.15)
+
+
+# ------------------------------------------------------ tom de voz e efeitos
+
+
+def test_emocao_do_falante_muda_a_entrega(tmp_path):
+    opts = RenderOptions(normalize=False, trim=False, per_line_files=False, lead_in=0, lead_out=0)
+    cue = Cue(kind="speech", text="You call that loud enough for me")
+    neutro, sr = render_cue(cue, fake_setting(emotion="neutro"), opts)
+    raiva, _ = render_cue(cue, fake_setting(emotion="raivoso"), opts)
+    cansado, _ = render_cue(cue, fake_setting(emotion="cansado"), opts)
+    # Raiva acelera, cansaco arrasta.
+    assert A.duration(raiva, sr) < A.duration(neutro, sr) < A.duration(cansado, sr)
+
+
+def test_emocao_na_linha_vence_a_do_falante(tmp_path):
+    opts = RenderOptions(normalize=False, per_line_files=False, lead_in=0, lead_out=0)
+    cast = {"A": fake_setting(speaker="A", emotion="cansado")}
+    lento = render_script("[A] one two three four five", cast, opts, tmp_path / "1")
+    rapido = render_script("[A](emotion=raivoso) one two three four five", cast,
+                           RenderOptions(normalize=False, per_line_files=False, lead_in=0, lead_out=0),
+                           tmp_path / "2")
+    assert rapido["duration"] < lento["duration"]
+
+
+def test_ajuste_numerico_vence_a_emocao(tmp_path):
+    """(speed=...) e absoluto e ignora o multiplicador do preset."""
+    opts = lambda: RenderOptions(normalize=False, per_line_files=False, lead_in=0, lead_out=0)
+    cast = {"A": fake_setting(speaker="A")}
+    a = render_script("[A](emotion=raivoso, speed=1.0) one two three", cast, opts(), tmp_path / "a")
+    b = render_script("[A](emotion=cansado, speed=1.0) one two three", cast, opts(), tmp_path / "b")
+    assert a["duration"] == pytest.approx(b["duration"], rel=0.02)
+
+
+def test_emocao_preserva_o_timbre_do_personagem(tmp_path):
+    """O preset e relativo: um personagem grave nao vira agudo com raiva."""
+    from app.render import _resolve
+
+    grave = _resolve(fake_setting(pitch=-6.0), {"emotion": "raivoso"})
+    agudo = _resolve(fake_setting(pitch=4.0), {"emotion": "raivoso"})
+    assert grave.pitch < 0 and grave.pitch < agudo.pitch
+
+
+def test_efeito_altera_o_audio(tmp_path):
+    opts = RenderOptions(normalize=False, trim=False, per_line_files=False)
+    cue = Cue(kind="speech", text="Systems online initiating sequence")
+    limpo, sr = render_cue(cue, fake_setting(), opts)
+    robo, _ = render_cue(cue, fake_setting(effect="robo"), opts)
+    n = min(len(limpo), len(robo))
+    assert float(np.sqrt(np.mean((robo[:n] - limpo[:n]) ** 2))) > 0.01
+
+
+def test_efeito_na_linha(tmp_path):
+    opts = RenderOptions(per_line_files=False)
+    m = render_script("[A](effect=telefone, intensidade=0.9) hello there", cast_for("A"), opts, tmp_path / "e")
+    assert m["errors"] == [] and m["lines"][0]["effect"] == "telefone"
+
+
+def test_manifesto_registra_tom_e_efeito(tmp_path):
+    cast = {"A": fake_setting(speaker="A", emotion="sombrio", effect="megafone")}
+    m = render_script("[A] hello there", cast, RenderOptions(per_line_files=False), tmp_path / "m")
+    assert m["lines"][0]["emotion"] == "sombrio"
+    assert m["lines"][0]["effect"] == "megafone"
+
+
+def test_emocao_desconhecida_nao_derruba_a_renderizacao(tmp_path):
+    cast = {"A": fake_setting(speaker="A", emotion="inexistente")}
+    m = render_script("[A] hello there", cast, RenderOptions(per_line_files=False), tmp_path / "x")
+    assert m["errors"] == [] and m["lines"][0]["emotion"] == "neutro"
+
+
+def test_efeito_nao_estoura_o_volume(tmp_path):
+    opts = RenderOptions(per_line_files=False)
+    for efeito in ("robo", "megafone", "radio", "alienigena", "coro"):
+        wav, _ = render_cue(Cue(kind="speech", text="Testing the effect chain"),
+                            fake_setting(effect=efeito), opts)
+        assert np.max(np.abs(wav)) <= 1.0, efeito
+
+
+def test_previa_e_renderizacao_aplicam_a_emocao_igualmente(tmp_path):
+    """Regressao: a emocao so era aplicada dentro de render_script, entao o
+    botao "Ouvir" (que chama render_cue direto) ignorava o preset."""
+    opts = RenderOptions(normalize=False, trim=False, per_line_files=False, lead_in=0, lead_out=0)
+    cue = Cue(kind="speech", text="You call that loud enough for me")
+
+    neutro, sr = render_cue(cue, fake_setting(emotion="neutro"), opts)
+    raiva, _ = render_cue(cue, fake_setting(emotion="raivoso"), opts)
+    assert A.duration(raiva, sr) < A.duration(neutro, sr)
+
+    # E o mesmo resultado pelo caminho completo.
+    cast = {"A": fake_setting(speaker="A", emotion="raivoso")}
+    via_script = render_script("[A] You call that loud enough for me", cast,
+                               RenderOptions(normalize=False, trim=False, per_line_files=False,
+                                             lead_in=0, lead_out=0),
+                               tmp_path / "s")
+    assert via_script["duration"] == pytest.approx(A.duration(raiva, sr), rel=0.02)
+
+
+def test_emocao_nao_e_aplicada_duas_vezes(tmp_path):
+    """render_script resolve para metadados e render_cue resolve para sintetizar;
+    os deltas nao podem se acumular."""
+    opts = lambda: RenderOptions(normalize=False, trim=False, per_line_files=False, lead_in=0, lead_out=0)
+    cast = {"A": fake_setting(speaker="A", emotion="cansado")}
+    m = render_script("[A] one two three four", cast, opts(), tmp_path / "d")
+
+    direto, sr = render_cue(Cue(kind="speech", text="one two three four"),
+                            fake_setting(emotion="cansado"), opts())
+    assert m["duration"] == pytest.approx(A.duration(direto, sr), rel=0.02)

@@ -23,9 +23,12 @@ from dataclasses import dataclass, field
 # [Falante] ou [Falante](chave=valor, ...) no inicio da linha
 SPEAKER_RE = re.compile(r"^\s*\[([^\]\n]+?)\]\s*(?:\(([^)]*)\))?\s*(.*)$")
 PAUSE_RE = re.compile(r"^(?:pausa|pause|silencio|sil[eê]ncio)\s*([0-9]*[.,]?[0-9]+)?\s*s?$", re.IGNORECASE)
-OVERRIDE_RE = re.compile(r"([a-zA-Z_]+)\s*=\s*(-?[0-9]*\.?[0-9]+)")
+OVERRIDE_RE = re.compile(r"([a-zA-Z_]+)\s*=\s*(-?[0-9]*\.?[0-9]+|[A-Za-z][\w-]*)")
 
-# Ajustes aceitos por fala, com limites que evitam valores absurdos.
+# Ajustes que recebem o nome de um preset, nao um numero.
+WORD_OVERRIDES = {"emotion", "effect"}
+
+# Ajustes numericos aceitos por fala, com limites que evitam valores absurdos.
 OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
     "speed": (0.3, 3.0),
     "pitch": (-24.0, 24.0),
@@ -33,6 +36,7 @@ OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
     "gap": (0.0, 60.0),
     "warmth": (-18.0, 18.0),
     "brightness": (-18.0, 18.0),
+    "effect_amount": (0.0, 1.0),
 }
 
 # Aliases em portugues, para o roteiro poder ser escrito no idioma do usuario.
@@ -45,6 +49,11 @@ OVERRIDE_ALIASES = {
     "intervalo": "gap",
     "calor": "warmth",
     "brilho": "brightness",
+    "emocao": "emotion",
+    "emoção": "emotion",
+    "tom_de_voz": "emotion",
+    "efeito": "effect",
+    "intensidade": "effect_amount",
 }
 
 
@@ -57,7 +66,7 @@ class Cue:
     speaker: str = ""
     text: str = ""
     seconds: float = 0.0  # usado quando kind == "pause"
-    overrides: dict[str, float] = field(default_factory=dict)
+    overrides: dict[str, float | str] = field(default_factory=dict)
     line_no: int = 0
 
     def to_dict(self) -> dict:
@@ -99,17 +108,35 @@ class ParseResult:
         }
 
 
-def _parse_overrides(raw: str | None, line_no: int, warnings: list[str]) -> dict[str, float]:
+def _parse_overrides(raw: str | None, line_no: int, warnings: list[str]) -> dict[str, float | str]:
     if not raw:
         return {}
-    out: dict[str, float] = {}
+
+    from . import effects, emotions
+
+    out: dict[str, float | str] = {}
     for key, value in OVERRIDE_RE.findall(raw):
         name = OVERRIDE_ALIASES.get(key.lower(), key.lower())
+
+        if name in WORD_OVERRIDES:
+            known = emotions.is_known if name == "emotion" else effects.is_known
+            if not known(value):
+                warnings.append(f"Linha {line_no}: {name} '{value}' nao existe, ignorado.")
+                continue
+            out[name] = value.strip().lower()
+            continue
+
         if name not in OVERRIDE_BOUNDS:
             warnings.append(f"Linha {line_no}: ajuste '{key}' desconhecido, ignorado.")
             continue
+
+        try:
+            num = float(value)
+        except ValueError:
+            warnings.append(f"Linha {line_no}: '{name}' espera um numero, recebeu '{value}'.")
+            continue
+
         lo, hi = OVERRIDE_BOUNDS[name]
-        num = float(value)
         if not lo <= num <= hi:
             clamped = max(lo, min(hi, num))
             warnings.append(f"Linha {line_no}: '{name}={num}' fora da faixa [{lo}, {hi}], usando {clamped}.")

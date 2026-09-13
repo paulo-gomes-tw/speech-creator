@@ -231,6 +231,32 @@ def tone(x: np.ndarray, sr: int, warmth_db: float = 0.0, brightness_db: float = 
     return _shelf(out, sr, 3500.0, brightness_db, high=True)
 
 
+def _pass(x: np.ndarray, sr: int, freq: float, high: bool, q: float = 0.707) -> np.ndarray:
+    """Passa-alta ou passa-baixa de 2a ordem (RBJ)."""
+    if len(x) == 0:
+        return x
+    freq = float(np.clip(freq, 20.0, sr * 0.45))
+    w0 = 2.0 * np.pi * freq / sr
+    cos_w0, alpha = np.cos(w0), np.sin(w0) / (2.0 * q)
+
+    if high:
+        b0, b1, b2 = (1 + cos_w0) / 2, -(1 + cos_w0), (1 + cos_w0) / 2
+    else:
+        b0, b1, b2 = (1 - cos_w0) / 2, 1 - cos_w0, (1 - cos_w0) / 2
+    a0, a1, a2 = 1 + alpha, -2 * cos_w0, 1 - alpha
+
+    return _biquad(x, np.array([b0, b1, b2]) / a0, np.array([a1, a2]) / a0)
+
+
+def bandpass(x: np.ndarray, sr: int, low: float, high: float, poles: int = 2) -> np.ndarray:
+    """Deixa passar so a faixa entre `low` e `high`. `poles` empilha biquads."""
+    out = x
+    for _ in range(max(1, poles)):
+        out = _pass(out, sr, low, high=True)
+        out = _pass(out, sr, high, high=False)
+    return out
+
+
 # --------------------------------------------------------------------------
 # Dinamica e limpeza
 # --------------------------------------------------------------------------
@@ -300,6 +326,97 @@ def soft_limit(x: np.ndarray, ceiling_dbfs: float = -0.5) -> np.ndarray:
     if peak <= ceiling:
         return x
     return (np.tanh(x / ceiling) * ceiling).astype(np.float32)
+
+
+# --------------------------------------------------------------------------
+# Primitivas de efeito
+# --------------------------------------------------------------------------
+
+
+def mix(dry: np.ndarray, wet: np.ndarray, amount: float) -> np.ndarray:
+    """Mistura sinal limpo e processado. amount=0 devolve o limpo, 1 o processado."""
+    amount = float(np.clip(amount, 0.0, 1.0))
+    n = min(len(dry), len(wet))
+    if n == 0:
+        return dry
+    return ((1.0 - amount) * dry[:n] + amount * wet[:n]).astype(np.float32)
+
+
+def robotize(x: np.ndarray, sr: int, n_fft: int = 1024, hop: int = 256) -> np.ndarray:
+    """Voz robotica classica: descarta a fase da STFT e ressintetiza.
+
+    Sem a fase original, todos os frames passam a se somar em fase, o que
+    substitui a entonacao por um zumbido constante em sr/hop Hz — o efeito
+    "robo" de sintetizador, mantendo os formantes (e a inteligibilidade).
+    """
+    if len(x) < n_fft:
+        return x
+    spec = _stft(x, n_fft, hop)
+    # Magnitude como numero real puro = fase zerada em todos os bins.
+    return _istft(np.abs(spec).astype(np.complex64), n_fft, hop, length=len(x))
+
+
+def ring_mod(x: np.ndarray, sr: int, freq: float = 55.0) -> np.ndarray:
+    """Modulacao em anel: multiplica por uma senoide, gerando bandas laterais."""
+    if len(x) == 0:
+        return x
+    t = np.arange(len(x), dtype=np.float32) / sr
+    return (x * np.sin(2.0 * np.pi * freq * t)).astype(np.float32)
+
+
+def bitcrush(x: np.ndarray, sr: int, bits: int = 8, downsample: int = 1) -> np.ndarray:
+    """Reduz resolucao de amplitude e/ou taxa de amostragem (lo-fi digital)."""
+    out = x
+    if downsample > 1:
+        # Sample-and-hold: segura cada amostra por `downsample` posicoes.
+        held = out[::downsample]
+        out = np.repeat(held, downsample)[: len(x)].astype(np.float32)
+        if len(out) < len(x):
+            out = np.pad(out, (0, len(x) - len(out)))
+    if bits < 16:
+        levels = float(2 ** max(1, bits))
+        out = (np.round(out * levels) / levels).astype(np.float32)
+    return out
+
+
+def comb(x: np.ndarray, sr: int, delay_ms: float = 8.0, feedback: float = 0.55) -> np.ndarray:
+    """Filtro pente: ressonancia metalica, o "corpo de lata" do robo."""
+    d = max(1, int(sr * delay_ms / 1000.0))
+    if len(x) <= d:
+        return x
+    out = x.astype(np.float32).copy()
+    fb = float(np.clip(feedback, 0.0, 0.95))
+    # Recursivo por blocos do tamanho do atraso: cada bloco so depende do anterior.
+    for start in range(d, len(out), d):
+        stop = min(start + d, len(out))
+        out[start:stop] += fb * out[start - d : stop - d]
+    peak = float(np.max(np.abs(out)))
+    return (out / peak * float(np.max(np.abs(x)))).astype(np.float32) if peak > 1.0 else out
+
+
+def detune_stack(x: np.ndarray, sr: int, cents: tuple[float, ...] = (-12.0, 12.0)) -> np.ndarray:
+    """Empilha copias levemente desafinadas: engrossa e "sintetiza" a voz."""
+    layers = [x]
+    for c in cents:
+        layers.append(pitch_shift(x, sr, c / 100.0))
+    n = min(len(layer) for layer in layers)
+    stacked = np.sum([layer[:n] for layer in layers], axis=0) / len(layers)
+    return stacked.astype(np.float32)
+
+
+def add_noise(x: np.ndarray, level_db: float = -34.0, seed: int = 0) -> np.ndarray:
+    """Chiado de fundo, para radio e transmissao antiga."""
+    if len(x) == 0:
+        return x
+    rng = np.random.default_rng(seed)
+    noise = rng.standard_normal(len(x)).astype(np.float32) * db_to_lin(level_db)
+    return (x + noise).astype(np.float32)
+
+
+def saturate(x: np.ndarray, drive: float = 3.0) -> np.ndarray:
+    """Saturacao por tanh: o "esgoelado" de megafone e alto-falante pequeno."""
+    drive = max(1.0, float(drive))
+    return (np.tanh(x * drive) / np.tanh(drive)).astype(np.float32)
 
 
 # --------------------------------------------------------------------------

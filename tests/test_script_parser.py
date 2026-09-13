@@ -120,3 +120,38 @@ def test_split_long_text_quebra_palavra_a_palavra_quando_preciso():
 def test_split_long_text_curto_nao_quebra():
     assert split_long_text("Curto.", 400) == ["Curto."]
     assert split_long_text("   ", 400) == []
+
+
+# ------------------------------------------------------ presets por nome
+
+
+def test_emocao_e_efeito_na_linha():
+    r = parse_script("[MC](emotion=raivoso, effect=robo, intensidade=0.9) Go!")
+    assert r.cues[0].overrides == {"emotion": "raivoso", "effect": "robo", "effect_amount": 0.9}
+
+
+def test_aliases_em_portugues_para_presets():
+    r = parse_script("[MC](emocao=cansado, efeito=telefone) oi")
+    assert r.cues[0].overrides == {"emotion": "cansado", "effect": "telefone"}
+
+
+def test_alias_em_ingles_do_preset_e_preservado():
+    r = parse_script("[MC](emotion=angry) oi")
+    assert r.cues[0].overrides["emotion"] == "angry"  # resolvido na renderizacao
+
+
+def test_preset_inexistente_vira_aviso():
+    r = parse_script("[MC](emotion=eufórico) oi")
+    assert "emotion" not in r.cues[0].overrides
+    assert any("nao existe" in w for w in r.warnings)
+
+
+def test_ajuste_numerico_com_palavra_vira_aviso():
+    r = parse_script("[MC](speed=rapido) oi")
+    assert r.cues[0].overrides == {}
+    assert any("espera um numero" in w for w in r.warnings)
+
+
+def test_presets_convivem_com_ajustes_numericos():
+    r = parse_script("[MC](emotion=raivoso, speed=1.5, pitch=-2) oi")
+    assert r.cues[0].overrides == {"emotion": "raivoso", "speed": 1.5, "pitch": -2.0}
