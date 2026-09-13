@@ -155,3 +155,18 @@ def test_ajuste_numerico_com_palavra_vira_aviso():
 def test_presets_convivem_com_ajustes_numericos():
     r = parse_script("[MC](emotion=raivoso, speed=1.5, pitch=-2) oi")
     assert r.cues[0].overrides == {"emotion": "raivoso", "speed": 1.5, "pitch": -2.0}
+
+
+def test_tag_de_tom_desconhecida_vira_aviso():
+    r = parse_script("[A] Teste <raivosoo> errado")
+    assert any("<raivosoo>" in w for w in r.warnings)
+
+
+def test_tag_de_tom_valida_nao_gera_aviso():
+    r = parse_script("[A] Teste <raivoso> certo")
+    assert r.warnings == []
+
+
+def test_texto_com_menor_que_nao_vira_aviso():
+    r = parse_script("[A] I love you <3 always")
+    assert r.warnings == []

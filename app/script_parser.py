@@ -214,8 +214,18 @@ def parse_script(script: str, default_speaker: str = "Narrador") -> ParseResult:
 
     flush(len(script.splitlines()))
 
+    from . import emotions as _emotions
+    from . import prosody as _prosody
+
     for i, cue in enumerate(cues):
         cue.index = i
+        # Tag de tom escrita errada passaria batida como texto falado.
+        for nome in _prosody.find_tags(cue.text):
+            if not _emotions.is_known(nome):
+                warnings.append(
+                    f"Linha {cue.line_no}: <{nome}> nao e um tom conhecido; "
+                    "sera lido como texto."
+                )
 
     if not cues:
         warnings.append("Roteiro vazio: nada para gerar.")

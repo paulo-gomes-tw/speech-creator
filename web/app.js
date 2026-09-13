@@ -16,14 +16,15 @@ const state = {
 };
 
 const EXAMPLE = `# Roteiro de exemplo - abertura do show
-# [Falante] texto | [pause 2] | ajustes: (speed=) (pitch=) (emotion=) (effect=)
+# [Falante] texto | [pause 2] | ajustes: (speed=) (emotion=) (effect=)
+# Trocar de tom no meio da fala: <raivoso> ... <neutro> ...
 
 [Announcer](emotion=epico) Ladies and gentlemen... please welcome to the stage... Voltage!
 
 [pause 2]
 
 [Singer](emotion=animado) Good evening! How are you feeling tonight?
-[Singer] We drove eight hours to get here, so you better be loud.
+[Singer] We drove eight hours to get here. <raivoso>So you better be loud!<neutro> Thanks for coming.
 
 [pause 1]
 
@@ -97,7 +98,12 @@ async function parseScript() {
     return;
   }
   try {
-    const r = await api("/api/parse", { method: "POST", body: JSON.stringify({ script }) });
+    const cleanCast = {};
+    for (const [k, v] of Object.entries(state.cast)) { const { _open, ...rest } = v; cleanCast[k] = rest; }
+    const r = await api("/api/parse", {
+      method: "POST",
+      body: JSON.stringify({ script, cast: cleanCast, options: collectOptions() }),
+    });
     const s = r.stats;
     $("script-stats").innerHTML =
       `<span><b>${s.lines}</b> falas</span>` +
@@ -115,6 +121,7 @@ async function parseScript() {
         }).join("")
       : '<span class="empty">Nenhum falante detectado.</span>';
 
+    renderTimeline(r.timeline);
     if (r.warnings.length) toast(r.warnings[0]);
   } catch (e) {
     toast(e.message, true);
@@ -141,6 +148,29 @@ $("btn-example").onclick = () => { $("script").value = EXAMPLE; parseScript(); }
 $("btn-clear").onclick = () => {
   if (confirm("Limpar o roteiro?")) { $("script").value = ""; parseScript(); }
 };
+
+// A linha do tempo vem pronta do servidor, calculada pelo mesmo codigo que
+// renderiza — reimplementar a precedencia aqui divergiria do audio gerado.
+function renderTimeline(linhas) {
+  if (!linhas || !linhas.length) {
+    $("timeline").innerHTML = '<div class="empty">Sem falas.</div>';
+    return;
+  }
+  const total = linhas.reduce((a, l) => a + l.gap, 0);
+  $("timeline").innerHTML = linhas.map((l, i) => `
+    <div class="line-item">
+      <span class="idx">${String(i + 1).padStart(2, "0")}</span>
+      <div>
+        <div class="who">${esc(l.speaker)}${l.emotion && l.emotion !== "neutro" ? ` <span class="badge b">${esc(l.emotion)}</span>` : ""}</div>
+        <div class="txt">${esc(l.text.slice(0, 70))}${l.text.length > 70 ? "…" : ""}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="who">${l.gap.toFixed(2)}s</div>
+        <div class="txt">${esc(l.source)}</div>
+      </div>
+    </div>`).join("") +
+    `<div class="stats" style="margin-top:10px"><span>Silêncio somado entre falas: <b>${total.toFixed(1)}s</b></span></div>`;
+}
 
 // ---------------------------------------------------------------- elenco
 
@@ -346,6 +376,7 @@ function renderCast() {
         c[el.dataset.f] = value === "" && el.dataset.f === "ref_audio" ? null : value;
         // Cada efeito tem a sua intensidade natural; trocar reinicia o slider.
         if (el.dataset.f === "effect") c.effect_amount = null;
+        parseScript();  // pausa e tom mudam a linha do tempo
       }
       if (el.type === "range") {
         const label = el.parentElement.querySelector(".slider-val");
@@ -684,6 +715,7 @@ async function deleteRef(name) {
  ["opt-gap", "v-gap", "s"], ["opt-target", "v-target", " dB"]].forEach(([input, out, unit]) => {
   $(input).addEventListener("input", () => {
     $(out).textContent = (unit === " dB" ? $(input).value : (+$(input).value).toFixed(1)) + unit;
+    if (input === "opt-gap") parseScript();
   });
 });
 

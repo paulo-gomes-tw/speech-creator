@@ -272,3 +272,18 @@ def test_render_com_presets_no_roteiro(client):
     linhas = done["manifest"]["lines"]
     assert linhas[0]["emotion"] == "raivoso"
     assert linhas[1]["effect"] == "robo"
+
+
+def test_parse_devolve_a_linha_do_tempo(client):
+    data = client.post("/api/parse", json={
+        "script": "[A] first line here\n[pause 3]\n[A] second line here",
+        "cast": {"A": {"engine": "fake", "voice": "af_heart", "gap": None}},
+        "options": {"default_gap": 0.8},
+    }).json()
+    assert [l["gap"] for l in data["timeline"]] == [3.0, 0.0]
+    assert data["timeline"][0]["source"] == "marcador [pause]"
+
+
+def test_parse_sem_elenco_ainda_funciona(client):
+    data = client.post("/api/parse", json={"script": "[A] hello there"}).json()
+    assert len(data["timeline"]) == 1

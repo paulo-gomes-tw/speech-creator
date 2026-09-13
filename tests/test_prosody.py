@@ -151,3 +151,77 @@ def test_velocidade_fica_na_faixa_do_modelo():
 
 def test_texto_vazio_devolve_plano_vazio():
     assert plan("   ", 1.0, (1.0,), "none") == []
+
+
+# ---------------------------------------------------------------- trechos
+
+
+from app.prosody import Span, find_tags, split_spans  # noqa: E402
+
+
+def test_troca_de_tom_no_meio_da_fala():
+    spans = split_spans("Good evening! <raivoso>Get up now!<neutro> Thanks.", "neutro")
+    assert [(s.emotion, s.text) for s in spans] == [
+        ("neutro", "Good evening!"),
+        ("raivoso", "Get up now!"),
+        ("neutro", "Thanks."),
+    ]
+
+
+def test_tag_vale_ate_o_fim_quando_nao_ha_outra():
+    spans = split_spans("Calm start. <cansado>and it fades away", "neutro")
+    assert spans[-1].emotion == "cansado"
+
+
+def test_intensidade_na_tag():
+    spans = split_spans("Calm. <raivoso:0.4>A bit angry.", "neutro")
+    assert spans[1].intensity == 0.4
+
+
+def test_tag_sem_intensidade_herda_a_da_fala():
+    spans = split_spans("Calm. <raivoso>Angry.", "neutro", default_intensity=0.7)
+    assert spans[1].intensity == 0.7
+
+
+def test_fala_sem_tag_vira_um_trecho_so():
+    spans = split_spans("Plain line here", "cansado", 0.6)
+    assert spans == [Span(text="Plain line here", emotion="cansado", intensity=0.6)]
+
+
+def test_tag_desconhecida_fica_como_texto():
+    """Um `<3` numa letra nao pode sumir da fala."""
+    spans = split_spans("I love you <3 always", "neutro")
+    assert len(spans) == 1 and spans[0].text == "I love you <3 always"
+
+
+def test_tag_no_inicio_da_fala():
+    spans = split_spans("<raivoso>Angry from the start.", "neutro")
+    assert len(spans) == 1 and spans[0].emotion == "raivoso"
+
+
+def test_tags_seguidas_nao_criam_trecho_vazio():
+    spans = split_spans("<raivoso><cansado>Only tired.", "neutro")
+    assert len(spans) == 1 and spans[0].emotion == "cansado"
+
+
+def test_alias_em_ingles_na_tag():
+    assert split_spans("Hi. <angry>Now!", "neutro")[1].emotion == "angry"
+
+
+def test_texto_vazio():
+    assert split_spans("   ", "neutro") == []
+
+
+def test_find_tags_lista_os_nomes():
+    assert find_tags("a <raivoso>b <naoexiste>c") == ["raivoso", "naoexiste"]
+    assert find_tags("") == []
+
+
+def test_nenhuma_palavra_e_perdida():
+    import re
+
+    texto = "Good evening! <raivoso>Get up now!<neutro> Thanks for coming."
+    spans = split_spans(texto, "neutro")
+    esperado = re.findall(r"[a-z']+", re.sub(r"<[^>]+>", " ", texto).lower())
+    obtido = re.findall(r"[a-z']+", " ".join(s.text for s in spans).lower())
+    assert obtido == esperado

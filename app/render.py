@@ -83,12 +83,91 @@ def _resolve(setting: VoiceSetting, overrides: dict[str, float | str]) -> VoiceS
     """
     emotion_id = overrides.get("emotion", setting.emotion)
     intensity = overrides.get("emotion_intensity", setting.emotion_intensity)
-    merged = emotions.apply(setting.to_dict(), emotion_id, float(intensity))
+    return _with_emotion(setting, overrides, str(emotion_id), float(intensity))
 
+
+def _with_emotion(
+    setting: VoiceSetting, overrides: dict[str, float | str], emotion_id: str, intensity: float
+) -> VoiceSetting:
+    """Igual ao `_resolve`, mas com o tom dado de fora.
+
+    Os trechos marcados com `<tom>` dentro de uma fala usam este caminho: cada
+    um recebe o seu preset, mantendo os ajustes numericos escritos na linha.
+    """
+    merged = emotions.apply(setting.to_dict(), emotion_id, intensity)
     for key, value in overrides.items():
         if key != "emotion" and key in merged:
             merged[key] = value
     return VoiceSetting.from_dict(merged)
+
+
+def effective_gap(
+    cue: Cue, setting: VoiceSetting, opts: RenderOptions
+) -> tuple[float, str]:
+    """Pausa depois de uma fala, e de onde ela veio.
+
+    Precedencia: ajuste da linha > pausa do falante > padrao do show. O
+    multiplicador do preset de tom incide sobre o padrao herdado, que e o caso
+    mais comum (a interface cria todo falante sem pausa propria).
+
+    Fonte unica dessa regra: a renderizacao e a previa da linha do tempo
+    chamam esta funcao, para nao divergirem.
+    """
+    da_linha = cue.overrides.get("gap")
+    if da_linha is not None:
+        return float(da_linha), "ajuste da linha"
+
+    if setting.gap is not None:
+        return float(setting.gap), "falante"
+
+    emocao = emotions.resolve(setting.emotion)
+    forca = max(0.0, min(1.0, float(setting.emotion_intensity)))
+    mult = 1.0 + (emocao.gap_mult - 1.0) * forca
+    if abs(mult - 1.0) < 1e-6:
+        return float(opts.default_gap), "padrão do show"
+    return float(opts.default_gap * mult), f"padrão do show × {mult:.2f} ({emocao.name})"
+
+
+def timeline(
+    script: str,
+    cast: dict[str, VoiceSetting],
+    opts: RenderOptions,
+    default_setting: VoiceSetting | None = None,
+) -> list[dict]:
+    """Pausa prevista para cada fala, sem sintetizar nada."""
+    parsed = parse_script(script)
+    fallback = default_setting or VoiceSetting()
+    linhas: list[dict] = []
+    pendente: dict | None = None
+
+    for cue in parsed.cues:
+        if cue.kind == "pause":
+            if pendente is not None:
+                # Marcador explicito substitui o gap automatico; seguidos, somam.
+                if pendente["source"] == "marcador [pause]":
+                    pendente["gap"] = round(pendente["gap"] + cue.seconds, 3)
+                else:
+                    pendente["gap"] = round(cue.seconds, 3)
+                    pendente["source"] = "marcador [pause]"
+            continue
+
+        setting = _resolve(cast.get(cue.speaker, fallback), cue.overrides)
+        gap, origem = effective_gap(cue, setting, opts)
+        pendente = {
+            "index": cue.index,
+            "speaker": cue.speaker,
+            "text": cue.text,
+            "line_no": cue.line_no,
+            "emotion": setting.emotion,
+            "gap": round(gap, 3),
+            "source": origem,
+        }
+        linhas.append(pendente)
+
+    if linhas:
+        linhas[-1]["gap"] = 0.0
+        linhas[-1]["source"] = "última fala"
+    return linhas
 
 
 def _safe_name(text: str) -> str:
@@ -103,6 +182,7 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
     aqui dentro, para que a previa da interface e a renderizacao completa
     passem exatamente pelo mesmo caminho.
     """
+    raw = setting
     setting = _resolve(setting, cue.overrides)
     engine = get_engine(setting.engine)
     sr = engine.sample_rate
@@ -115,54 +195,67 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
 
     from .engines.base import SynthRequest
 
-    # O preset molda o fraseado ANTES da sintese: cada oracao vai ao modelo com
-    # a sua propria velocidade e pontuacao. E assim que a emocao entra sem
-    # tocar no sinal depois — a voz continua sendo a mesma voz.
-    emotion = emotions.resolve(setting.emotion)
-    k = max(0.0, min(1.0, float(setting.emotion_intensity)))
-    respiro = emotion.clause_pause * k
+    # A fala pode trocar de tom no meio, via `<tom>`. Cada trecho recebe o seu
+    # preset e vai ao modelo com a sua propria velocidade e pontuacao: e assim
+    # que a emocao entra sem tocar no sinal depois, mantendo a mesma voz.
+    spans = prosody.split_spans(cue.text, setting.emotion, setting.emotion_intensity)
 
     pieces: list[np.ndarray] = []
-    for chunk in split_long_text(cue.text):
-        for texto, velocidade in prosody.plan(
-            chunk, setting.speed, emotion.contour, emotion.punctuation, k
-        ):
-            part = engine.synth(
-                SynthRequest(
-                    text=texto,
-                    voice=setting.voice,
-                    speed=velocidade,
-                    lang=setting.lang,
-                    ref_audio=setting.ref_audio,
-                    params=setting.params or {},
+    for span in spans:
+        span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
+        emotion = emotions.resolve(span.emotion)
+        k = max(0.0, min(1.0, float(span.intensity)))
+        respiro = emotion.clause_pause * k
+
+        trecho: list[np.ndarray] = []
+        for chunk in split_long_text(span.text):
+            for texto, velocidade in prosody.plan(
+                chunk, span_setting.speed, emotion.contour, emotion.punctuation, k
+            ):
+                part = engine.synth(
+                    SynthRequest(
+                        text=texto,
+                        voice=span_setting.voice,
+                        speed=velocidade,
+                        lang=span_setting.lang,
+                        ref_audio=span_setting.ref_audio,
+                        params=span_setting.params or {},
+                    )
                 )
-            )
-            if len(part):
-                pieces.append(part)
+                if len(part):
+                    trecho.append(part)
+                    trecho.append(A.silence(0.12 + respiro, sr))
+
+        if not trecho:
+            continue
+        trecho.pop()  # o respiro sobrando no fim do trecho
+        audio_trecho = np.concatenate(trecho).astype(np.float32)
+
+        # Volume e timbre variam por tom, entao sao aplicados por trecho. A
+        # normalizacao da fala inteira, mais abaixo, preserva a relacao entre eles.
+        if abs(span_setting.volume) > 1e-3:
+            audio_trecho = A.apply_gain_db(audio_trecho, span_setting.volume)
+        if abs(span_setting.warmth) > 1e-3 or abs(span_setting.brightness) > 1e-3:
+            audio_trecho = A.tone(audio_trecho, sr, span_setting.warmth, span_setting.brightness)
+
+        pieces.append(audio_trecho)
+        pieces.append(A.silence(0.12 + respiro, sr))
 
     if not pieces:
         return np.zeros(0, dtype=np.float32), sr
-
-    # Emenda com uma respiracao curta; o preset pode alongar esse respiro.
-    joined: list[np.ndarray] = []
-    for i, piece in enumerate(pieces):
-        joined.append(piece)
-        if i < len(pieces) - 1:
-            joined.append(A.silence(0.12 + respiro, sr))
-    out = np.concatenate(joined).astype(np.float32)
+    pieces.pop()
+    out = np.concatenate(pieces).astype(np.float32)
 
     if opts.trim:
         out = A.trim_silence(out, sr)
     if abs(setting.pitch) > 1e-3:
         out = A.pitch_shift(out, sr, setting.pitch)
-    if abs(setting.warmth) > 1e-3 or abs(setting.brightness) > 1e-3:
-        out = A.tone(out, sr, setting.warmth, setting.brightness)
     if setting.effect and setting.effect != effects.DEFAULT:
         out = effects.apply(out, sr, setting.effect, setting.effect_amount)
     if opts.normalize:
+        # Normaliza a fala inteira: as diferencas de volume entre os trechos
+        # sao relativas, entao sobrevivem.
         out = A.rms_normalize(out, opts.target_dbfs)
-    if abs(setting.volume) > 1e-3:
-        out = A.apply_gain_db(out, setting.volume)
 
     out = A.fade(out, sr)
 
@@ -205,6 +298,7 @@ def render_script(
     errors: list[dict] = []
     out_sr: int | None = None
     lead_in = opts.lead_in
+    pausa_declarada: set[int] = set()  # segmentos cujo silencio veio de [pause N]
     done = 0
 
     for cue in parsed.cues:
@@ -212,12 +306,18 @@ def render_script(
             raise EngineError("Renderizacao cancelada.")
 
         if cue.kind == "pause":
-            # Uma pausa explicita vira gap do segmento anterior; antes da primeira
-            # fala, vira silencio inicial. `opts` nao e mutado: ele pode ser
-            # reaproveitado entre renderizacoes.
+            # `[pause N]` vale N segundos de silencio, nao N somados a pausa
+            # automatica: quem escreve o marcador esta declarando o tempo que
+            # quer ali. Marcadores seguidos se acumulam.
             if segments:
-                segments[-1].gap_after += cue.seconds
+                indice = len(segments) - 1
+                if indice in pausa_declarada:
+                    segments[-1].gap_after += cue.seconds
+                else:
+                    segments[-1].gap_after = cue.seconds
+                    pausa_declarada.add(indice)
             else:
+                # Antes da primeira fala nao ha gap automatico para substituir.
                 lead_in += cue.seconds
             continue
 
@@ -243,10 +343,7 @@ def render_script(
             done += 1
             continue
 
-        # Precedencia: ajuste da linha > configuracao do falante > padrao do show.
-        gap = cue.overrides.get("gap")
-        if gap is None:
-            gap = setting.gap if setting.gap is not None else opts.default_gap
+        gap, _origem = effective_gap(cue, setting, opts)
         segments.append(A.Segment(audio=wav, gap_after=float(gap), label=cue.speaker))
 
         record = {

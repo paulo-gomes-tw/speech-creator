@@ -173,6 +173,24 @@ Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
 referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
 o preset também ajusta `exaggeration` e `cfg_weight`.
 
+### Trocar de tom no meio da fala
+
+Uma tag `<tom>` troca o tom dali em diante, até a próxima tag ou o fim da fala.
+Não há tag de fechamento — numa fala há muito mais trocas do que pares, e
+esquecer de fechar seria o erro mais comum:
+
+```
+[Singer] We drove eight hours to get here. <raivoso>So you better be loud!<neutro> Thanks for coming.
+```
+
+Cada trecho recebe o preset inteiro: velocidade, contorno, respiro, pontuação e
+volume próprios. A normalização é da fala inteira, então as diferenças de
+volume entre os trechos sobrevivem.
+
+Dá para dosar por trecho: `<raivoso:0.4>`. Uma tag cujo nome não seja um tom
+conhecido fica como texto literal (um `<3` numa letra não some), e o roteiro
+avisa se parecer erro de digitação.
+
 ## Efeitos de voz
 
 Processamento de sinal — determinístico, sai idêntico em qualquer motor:
@@ -201,6 +219,26 @@ inteligível.
 
 Cada efeito tem uma **intensidade** de 0 a 100%, que mistura sinal limpo e
 processado.
+
+## Pausas
+
+| Controle | Onde | O que faz |
+|---|---|---|
+| silêncio no início / fim | ajustes do show | antes da primeira e depois da última fala |
+| pausa padrão entre falas | ajustes do show | usada por quem não definiu a sua |
+| pausa depois | por falante | sobrepõe o padrão do show |
+| `(gap=2)` / `(pausa=2)` | na linha | sobrepõe o falante |
+| `[pause 2]` | no roteiro | **vale exatamente 2 segundos** ali |
+| preset de tom | automático | multiplica a pausa herdada (raiva aperta, cansaço alonga) |
+
+`[pause N]` **substitui** a pausa automática em vez de somar-se a ela: quem
+escreve o marcador está declarando o tempo que quer. Marcadores seguidos se
+acumulam (`[pause 1]` + `[pause 2]` = 3 s).
+
+A aba **Roteiro** tem um painel de **linha do tempo** que mostra a pausa
+calculada depois de cada fala e de onde ela veio — conferível antes de gerar.
+Ele é calculado pelo mesmo código que renderiza o áudio (`effective_gap()` em
+`app/render.py`), então não diverge do resultado.
 
 ## Precedência dos ajustes
 
@@ -299,7 +337,7 @@ app/
   effects.py         efeitos de voz (robô, megafone, rádio...)
   engines/           kokoro_engine.py, chatterbox_engine.py, base.py
 web/                 interface (HTML/CSS/JS puro, sem build)
-tests/               246 testes
+tests/               294 testes
 data/                projetos, saídas e amostras (não versionado)
 ```
 

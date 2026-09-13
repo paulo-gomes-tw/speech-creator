@@ -362,3 +362,54 @@ def test_emocao_nao_e_aplicada_duas_vezes(tmp_path):
     direto, sr = render_cue(Cue(kind="speech", text="one two three four"),
                             fake_setting(emotion="cansado"), opts())
     assert m["duration"] == pytest.approx(A.duration(direto, sr), rel=0.02)
+
+
+# ------------------------------------------------- tom por trecho da fala
+
+
+def test_trecho_com_tom_proprio_muda_a_fala(tmp_path):
+    opts = lambda: RenderOptions(normalize=False, trim=False, per_line_files=False,
+                                 lead_in=0, lead_out=0)
+    cast = cast_for("A")
+    com = render_script("[A] Good evening everyone! <cansado>and I am so tired now.",
+                        cast, opts(), tmp_path / "com")
+    sem = render_script("[A] Good evening everyone! and I am so tired now.",
+                        cast, opts(), tmp_path / "sem")
+    assert com["duration"] > sem["duration"]  # o trecho cansado arrasta
+
+
+def test_cada_trecho_recebe_o_seu_preset(tmp_path):
+    """Raiva acelera e cansaco arrasta dentro da MESMA fala."""
+    opts = lambda: RenderOptions(normalize=False, trim=False, per_line_files=False,
+                                 lead_in=0, lead_out=0)
+    rapido = render_script("[A] <raivoso>Get up on your feet right now everyone!",
+                           cast_for("A"), opts(), tmp_path / "r")
+    lento = render_script("[A] <cansado>Get up on your feet right now everyone!",
+                          cast_for("A"), opts(), tmp_path / "l")
+    assert rapido["duration"] < lento["duration"]
+
+
+def test_tag_desconhecida_nao_e_falada_como_tom(tmp_path):
+    m = render_script("[A] I love you <3 always", cast_for("A"),
+                      RenderOptions(per_line_files=False), tmp_path / "t")
+    assert m["errors"] == []
+
+
+def test_ajuste_da_linha_vale_para_todos_os_trechos():
+    """`speed=` na linha e absoluto: nenhum trecho escapa dele."""
+    from app.render import _with_emotion
+
+    base = fake_setting()
+    for emocao in ("neutro", "raivoso", "cansado"):
+        assert _with_emotion(base, {"speed": 1.0}, emocao, 1.0).speed == 1.0
+
+
+def test_trechos_nao_quebram_a_fala_sem_tag(tmp_path):
+    """Sem tags, o resultado tem de ser identico ao de antes do recurso."""
+    opts = lambda: RenderOptions(normalize=False, trim=False, per_line_files=False,
+                                 lead_in=0, lead_out=0)
+    a = render_script("[A] Good evening everyone, welcome to the show tonight.",
+                      cast_for("A"), opts(), tmp_path / "a")
+    b = render_script("[A] Good evening everyone, welcome to the show tonight.",
+                      {"A": fake_setting(speaker="A", emotion="neutro")}, opts(), tmp_path / "b")
+    assert a["duration"] == pytest.approx(b["duration"], abs=0.01)

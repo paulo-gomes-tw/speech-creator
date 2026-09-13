@@ -18,6 +18,7 @@ Tudo isso passa pela sintese, entao o resultado continua sendo a mesma voz.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -150,3 +151,74 @@ def plan(
         aplicado = 1.0 + (fator - 1.0) * intensity
         plano.append((clause, float(np.clip(base_speed * aplicado, 0.3, 3.0))))
     return plano
+
+
+# --------------------------------------------------------------------------
+# Trechos com tom proprio dentro de uma mesma fala
+# --------------------------------------------------------------------------
+
+# <raivoso> ou <raivoso:0.5>. Troca o tom dali em diante, sem tag de fechamento:
+# uma fala tem muito mais trocas do que pares, e esquecer de fechar seria o
+# erro mais comum.
+SPAN_TAG = re.compile(r"<\s*([A-Za-zÀ-ÿ][\wÀ-ÿ-]*)\s*(?::\s*([01]?(?:\.\d+)?)\s*)?>")
+
+
+@dataclass(frozen=True)
+class Span:
+    """Um trecho de fala com o seu proprio tom."""
+
+    text: str
+    emotion: str
+    intensity: float
+
+
+def find_tags(text: str) -> list[str]:
+    """Nomes usados em tags de tom, para o parser poder validar e avisar."""
+    return [m.group(1) for m in SPAN_TAG.finditer(text or "")]
+
+
+def split_spans(
+    text: str,
+    default_emotion: str = "neutro",
+    default_intensity: float = 1.0,
+    is_known=None,
+) -> list[Span]:
+    """Divide a fala nos trechos marcados por `<tom>`.
+
+    Uma tag cujo nome nao seja um tom conhecido e deixada como texto literal —
+    assim um `<3` ou um `<br>` numa letra nao some da fala.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    if is_known is None:
+        from . import emotions
+
+        is_known = emotions.is_known
+
+    spans: list[Span] = []
+    emocao, forca = default_emotion, default_intensity
+    buffer: list[str] = []
+    pos = 0
+
+    def fechar() -> None:
+        trecho = "".join(buffer).strip()
+        buffer.clear()
+        if trecho:
+            spans.append(Span(text=trecho, emotion=emocao, intensity=forca))
+
+    for m in SPAN_TAG.finditer(text):
+        nome = m.group(1)
+        if not is_known(nome):
+            continue  # nao e tag de tom: fica no texto
+        buffer.append(text[pos:m.start()])
+        fechar()
+        emocao = nome.strip().lower()
+        forca = float(m.group(2)) if m.group(2) else default_intensity
+        pos = m.end()
+
+    buffer.append(text[pos:])
+    fechar()
+
+    return spans or [Span(text=text, emotion=default_emotion, intensity=default_intensity)]

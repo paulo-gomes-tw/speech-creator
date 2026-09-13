@@ -15,7 +15,7 @@ from . import config, effects, emotions, projects
 from .engines import EngineError, get_engine, list_engines
 from .engines.base import SynthRequest
 from .jobs import manager
-from .render import RenderOptions, VoiceSetting, render_cue
+from .render import RenderOptions, VoiceSetting, render_cue, timeline
 from .script_parser import Cue, parse_script
 from .voices import LANGUAGES, describe_blend, lang_of
 
@@ -87,10 +87,21 @@ def api_effects() -> dict:
 
 @app.post("/api/parse")
 async def api_parse(payload: dict) -> dict:
+    """Analisa o roteiro e, se o elenco vier junto, preve as pausas.
+
+    A previsao sai do mesmo codigo que renderiza, para a linha do tempo
+    mostrada na interface nao divergir do audio gerado.
+    """
     script = payload.get("script", "")
     if not isinstance(script, str):
         raise HTTPException(status_code=400, detail="Campo 'script' deve ser texto.")
-    return parse_script(script).to_dict()
+
+    out = parse_script(script).to_dict()
+    cast = {name: VoiceSetting.from_dict(data) for name, data in (payload.get("cast") or {}).items()}
+    for name, setting in cast.items():
+        setting.speaker = name
+    out["timeline"] = timeline(script, cast, RenderOptions.from_dict(payload.get("options") or {}))
+    return out
 
 
 @app.post("/api/preview")

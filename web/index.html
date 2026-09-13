@@ -35,7 +35,8 @@
             Uma fala por marcador: <code>[Narrator] Good evening!</code> ·
             pausa: <code>[pause 2]</code> ·
             ajustes na linha: <code>[MC](speed=1.1, pitch=-2)</code>
-            <code>(emotion=raivoso)</code> <code>(effect=robo)</code>
+            <code>(emotion=raivoso)</code> <code>(effect=robo)</code> ·
+            tom no meio da fala: <code>&lt;raivoso&gt;</code>
           </p>
           <textarea id="script" spellcheck="false"></textarea>
           <div class="row" style="margin-top:10px">
@@ -98,6 +99,15 @@
           <h2>Falantes detectados</h2>
           <p class="hint">Cada um vira uma entrada no Elenco.</p>
           <div id="speaker-chips" class="row"></div>
+        </div>
+
+        <div class="card">
+          <h2>Linha do tempo</h2>
+          <p class="hint">
+            Pausa depois de cada fala, já com o preset de tom aplicado, e de
+            onde ela veio. Calculada pelo mesmo código que gera o áudio.
+          </p>
+          <div id="timeline"></div>
         </div>
       </div>
     </div>
