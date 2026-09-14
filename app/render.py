@@ -250,8 +250,10 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
 
         # Agressao vocal: compressao, saturacao e agudos, que sao os correlatos
         # acusticos do grito. Vem antes do volume para o ganho do preset incidir
-        # sobre o resultado ja esgoelado.
-        if span_setting.aggression:
+        # sobre o resultado ja esgoelado. So faz sentido em motores sem
+        # expressividade nativa (ex. Kokoro); no Chatterbox a emocao ja vem da
+        # sintese (exaggeration/cfg_weight) e esse pos-processo so distorce.
+        if span_setting.aggression and not engine.native_expressiveness:
             audio_trecho = A.aggression(audio_trecho, sr, span_setting.aggression)
 
         # Entre trechos so entra a diferenca RELATIVA de volume; o nivel da fala

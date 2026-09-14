@@ -42,6 +42,13 @@ class Engine(ABC):
     sample_rate: int = 24000
     install_hint: str = ""
 
+    # True para motores que ja recebem emocao/esforco vocal na propria sintese
+    # (ex.: exaggeration/cfg_weight do Chatterbox). Nesses motores o efeito de
+    # agressao (compressao + saturacao de sinal) nao deve ser aplicado por
+    # cima: alem de redundante, ele distorce um audio que ja tem a
+    # entonacao certa, sem soar mais agressivo.
+    native_expressiveness: bool = False
+
     @abstractmethod
     def is_available(self) -> bool:
         """True se as dependencias estiverem instaladas (sem baixar o modelo)."""
