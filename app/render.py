@@ -333,6 +333,24 @@ def render_script(
     pausa_declarada: set[int] = set()  # segmentos cujo silencio veio de [pause N]
     done = 0
 
+    # Carrega os modelos antes do loop: na primeira vez isso baixa alguns GB
+    # (o Chatterbox e bem maior que o Kokoro) e, sem aviso, a interface fica
+    # parada no 0% como se tivesse travado.
+    for engine_id in dict.fromkeys(
+        _resolve(cast.get(c.speaker, fallback), c.overrides).engine for c in speech_cues
+    ):
+        if cancelled and cancelled():
+            raise EngineError("Renderizacao cancelada.")
+        try:
+            engine = get_engine(engine_id)
+            if progress:
+                progress(0, total, f"Carregando o modelo {engine.name} (pode demorar na primeira vez)...")
+            engine.warmup()
+        except Exception:
+            # Aquecer e so para dar feedback: a falha real vira erro da fala,
+            # que o loop reporta sem derrubar as outras.
+            pass
+
     for cue in parsed.cues:
         if cancelled and cancelled():
             raise EngineError("Renderizacao cancelada.")

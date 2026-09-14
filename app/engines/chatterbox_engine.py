@@ -42,7 +42,7 @@ class ChatterboxEngine(Engine):
     install_hint = "pip install chatterbox-tts"
 
     def __init__(self, device: str | None = None) -> None:
-        self.device = device or config.DEVICE
+        self.device = device or config.best_device()
         self._model = None
         self._multilingual = False
         self._lock = threading.Lock()

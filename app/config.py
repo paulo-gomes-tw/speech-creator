@@ -20,6 +20,26 @@ DEFAULT_ENGINE = os.environ.get("SPEECH_CREATOR_ENGINE", "kokoro")
 # "cpu" ou "cuda". Kokoro roda confortavelmente em CPU.
 DEVICE = os.environ.get("SPEECH_CREATOR_DEVICE", "cpu")
 
+
+def best_device() -> str:
+    """Melhor acelerador disponivel, para os motores que ganham com isso.
+
+    O Kokoro tem 82M parametros e roda em CPU mais rapido que tempo real; o
+    Chatterbox tem ~1B e nao. Em Apple Silicon a GPU (`mps`) muda essa conta.
+    Se `SPEECH_CREATOR_DEVICE` foi definido, ele vence.
+    """
+    if os.environ.get("SPEECH_CREATOR_DEVICE"):
+        return DEVICE
+    try:
+        import torch
+    except ImportError:
+        return DEVICE
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return DEVICE
+
 # Quantas renderizacoes podem rodar ao mesmo tempo. Sintese e pesada em CPU,
 # entao 1 evita que o processo estoure a memoria com varios modelos ativos.
 RENDER_WORKERS = int(os.environ.get("SPEECH_CREATOR_WORKERS", "1"))
