@@ -241,6 +241,12 @@ audio { width: 100%; margin-top: 8px; filter: invert(.92) hue-rotate(180deg); bo
 .msg.ok { background: rgba(53,199,127,.12); border: 1px solid rgba(53,199,127,.35); color: #9fe9c4; }
 .msg.warn { background: rgba(255,179,64,.12); border: 1px solid rgba(255,179,64,.35); color: #ffd79a; }
 
+details.msg > summary { cursor: pointer; font-weight: 600; list-style: none; }
+details.msg > summary::-webkit-details-marker { display: none; }
+details.msg > summary::before { content: "▸ "; }
+details.msg[open] > summary::before { content: "▾ "; }
+details.msg[open] > summary { margin-bottom: 10px; }
+
 .stats { display: flex; gap: 16px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
 .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
 
