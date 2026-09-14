@@ -41,6 +41,7 @@ class ChatterboxEngine(Engine):
     splits_clauses = False  # a amostra de referencia ja carrega a entrega
     sample_rate = 24000
     install_hint = "pip install chatterbox-tts"
+    native_expressiveness = True
 
     def __init__(self, device: str | None = None) -> None:
         self.device = device or config.best_device()

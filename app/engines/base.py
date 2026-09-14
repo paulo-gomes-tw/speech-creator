@@ -42,6 +42,13 @@ class Engine(ABC):
     sample_rate: int = 24000
     install_hint: str = ""
 
+    # True para motores que ja recebem emocao/esforco vocal na propria sintese
+    # (ex.: exaggeration/cfg_weight do Chatterbox). Nesses motores o efeito de
+    # agressao (compressao + saturacao de sinal) nao deve ser aplicado por
+    # cima: alem de redundante, ele distorce um audio que ja tem a
+    # entonacao certa, sem soar mais agressivo.
+    native_expressiveness: bool = False
+
     # Se a emocao deve ser encenada mandando cada oracao ao modelo com a sua
     # propria velocidade e pontuacao. Faz sentido em motores que nao sabem
     # atuar (o Kokoro) e que geram mais rapido que tempo real. Motores que
