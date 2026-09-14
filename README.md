@@ -111,16 +111,17 @@ Combinando os três, cada voz base vira dezenas de personagens distintos.
 Para usar a voz de alguém da banda:
 
 ```bash
-.venv/bin/pip install chatterbox-tts setuptools
+.venv/bin/pip install chatterbox-tts "setuptools<81"
 ```
 
 Instale **dentro do `.venv`** — é o ambiente que o servidor usa; instalar no
 Python do sistema faz o motor aparecer como "não instalado" na interface.
 
-O `setuptools` não é opcional: o `perth` (a marca d'água que o Chatterbox
-aplica no áudio) importa `pkg_resources`, que saiu dos venvs a partir do
-Python 3.12. Sem ele o modelo falha ao carregar com
-`'NoneType' object is not callable`.
+O `setuptools` não é opcional, e a **versão importa**: o `perth` (a marca
+d'água que o Chatterbox aplica no áudio) importa `pkg_resources`, que saiu dos
+venvs a partir do Python 3.12 e foi removido do `setuptools` 81+. Instalar o
+mais recente não resolve — é preciso um anterior ao 81. Sem isso o modelo
+falha ao carregar com `'NoneType' object is not callable`.
 
 Envie uma amostra de 7 a 20 segundos na aba **Projetos**, e escolha o motor
 Chatterbox no elenco. Licença MIT, também gratuito.
@@ -183,6 +184,12 @@ Os presets são **relativos**: um personagem configurado grave continua grave.
 Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
 referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
 o preset também ajusta `exaggeration` e `cfg_weight`.
+
+No Chatterbox a fala vai ao modelo **inteira, numa geração só**: o contorno de
+velocidade por oração e o respiro entre orações não se aplicam. Eles existem
+para encenar emoção num motor que não sabe atuar; quando a entrega vem da
+amostra, fatiar briga com ela — e cada oração custaria uma geração inteira, que
+ali é da ordem de um minuto.
 
 > **"Igualar volume" e os presets.** A normalização acontece *antes* dos ganhos
 > deliberados (seu slider de volume e o do preset). Ela existe para emparelhar
