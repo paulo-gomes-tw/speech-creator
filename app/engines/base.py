@@ -49,6 +49,13 @@ class Engine(ABC):
     # entonacao certa, sem soar mais agressivo.
     native_expressiveness: bool = False
 
+    # Se a emocao deve ser encenada mandando cada oracao ao modelo com a sua
+    # propria velocidade e pontuacao. Faz sentido em motores que nao sabem
+    # atuar (o Kokoro) e que geram mais rapido que tempo real. Motores que
+    # clonam a entrega de uma amostra devem desligar: fatiar briga com a
+    # interpretacao copiada e cobra uma geracao inteira por oracao.
+    splits_clauses: bool = True
+
     @abstractmethod
     def is_available(self) -> bool:
         """True se as dependencias estiverem instaladas (sem baixar o modelo)."""

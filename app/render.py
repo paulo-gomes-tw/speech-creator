@@ -222,13 +222,21 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
         span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
         emotion = emotions.resolve(span.emotion)
         k = max(0.0, min(1.0, float(span.intensity)))
-        respiro = emotion.clause_pause * k
+        respiro = emotion.clause_pause * k if engine.splits_clauses else 0.0
 
         trecho: list[np.ndarray] = []
         for chunk in split_long_text(span.text):
-            for texto, velocidade in prosody.plan(
-                chunk, span_setting.speed, emotion.contour, emotion.punctuation, k
-            ):
+            if engine.splits_clauses:
+                plano = prosody.plan(
+                    chunk, span_setting.speed, emotion.contour, emotion.punctuation, k
+                )
+            else:
+                # Uma geracao so para o trecho inteiro: quem clona copia a
+                # entrega da amostra, e cada oracao extra custa uma geracao.
+                texto_unico = chunk.strip()
+                plano = [(texto_unico, span_setting.speed)] if texto_unico else []
+
+            for texto, velocidade in plano:
                 part = engine.synth(
                     SynthRequest(
                         text=texto,
@@ -334,6 +342,24 @@ def render_script(
     lead_in = opts.lead_in
     pausa_declarada: set[int] = set()  # segmentos cujo silencio veio de [pause N]
     done = 0
+
+    # Carrega os modelos antes do loop: na primeira vez isso baixa alguns GB
+    # (o Chatterbox e bem maior que o Kokoro) e, sem aviso, a interface fica
+    # parada no 0% como se tivesse travado.
+    for engine_id in dict.fromkeys(
+        _resolve(cast.get(c.speaker, fallback), c.overrides).engine for c in speech_cues
+    ):
+        if cancelled and cancelled():
+            raise EngineError("Renderizacao cancelada.")
+        try:
+            engine = get_engine(engine_id)
+            if progress:
+                progress(0, total, f"Carregando o modelo {engine.name} (pode demorar na primeira vez)...")
+            engine.warmup()
+        except Exception:
+            # Aquecer e so para dar feedback: a falha real vira erro da fala,
+            # que o loop reporta sem derrubar as outras.
+            pass
 
     for cue in parsed.cues:
         if cancelled and cancelled():

@@ -241,6 +241,12 @@ audio { width: 100%; margin-top: 8px; filter: invert(.92) hue-rotate(180deg); bo
 .msg.ok { background: rgba(53,199,127,.12); border: 1px solid rgba(53,199,127,.35); color: #9fe9c4; }
 .msg.warn { background: rgba(255,179,64,.12); border: 1px solid rgba(255,179,64,.35); color: #ffd79a; }
 
+details.msg > summary { cursor: pointer; font-weight: 600; list-style: none; }
+details.msg > summary::-webkit-details-marker { display: none; }
+details.msg > summary::before { content: "▸ "; }
+details.msg[open] > summary::before { content: "▾ "; }
+details.msg[open] > summary { margin-bottom: 10px; }
+
 .stats { display: flex; gap: 16px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
 .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
 
@@ -274,6 +280,18 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-si
 
 #toast.show { transform: translateX(-50%) translateY(0); }
 #toast.error { border-color: var(--err); color: #ffb3b8; }
+
+/* Mensagens de varias linhas (dicas de instalacao, com comandos para copiar)
+   perdem o formato de pilula: o texto precisa alinhar a esquerda e manter as
+   quebras, senao o comando se perde no meio da frase. */
+#toast.multiline {
+  white-space: pre-line;
+  text-align: left;
+  border-radius: 12px;
+  padding: 14px 18px;
+  max-width: min(90vw, 620px);
+  line-height: 1.5;
+}
 
 .proj-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .proj-item:last-child { border-bottom: none; }

@@ -47,10 +47,12 @@ const $ = (id) => document.getElementById(id);
 
 function toast(msg, isError = false) {
   const el = $("toast");
+  const multiline = String(msg).includes("\n");
   el.textContent = msg;
-  el.className = "show" + (isError ? " error" : "");
+  el.className = "show" + (isError ? " error" : "") + (multiline ? " multiline" : "");
   clearTimeout(el._t);
-  el._t = setTimeout(() => (el.className = ""), 3600);
+  // Uma dica com comando para copiar nao cabe nos 3,6s de um aviso curto.
+  el._t = setTimeout(() => (el.className = ""), multiline ? 15000 : 3600);
 }
 
 async function api(path, options = {}) {
