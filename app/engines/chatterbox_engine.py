@@ -77,11 +77,43 @@ class ChatterboxEngine(Engine):
         try:
             self._model = Model.from_pretrained(device=self.device)
         except Exception as exc:
-            raise EngineError(f"Falha ao carregar o Chatterbox: {exc}") from exc
+            raise EngineError(self._load_hint(exc)) from exc
 
         if getattr(self._model, "sr", None):
             self.sample_rate = int(self._model.sr)
         return self._model
+
+    @staticmethod
+    def _load_hint(exc: Exception) -> str:
+        """Transforma a falha de carga numa mensagem acionavel."""
+        base = f"Falha ao carregar o Chatterbox: {exc}"
+        text = str(exc).lower()
+
+        # O perth (marca d'agua do Chatterbox) importa pkg_resources, que saiu
+        # dos venvs no Python 3.12. O __init__ dele engole o ImportError e
+        # deixa a classe como None, entao o erro que chega aqui nao diz nada.
+        if "nonetype" in text and "not callable" in text:
+            return (
+                base
+                + "\n\nProvavelmente falta o setuptools: o perth (marca d'agua"
+                + " do Chatterbox) importa pkg_resources, que nao vem mais nos"
+                + " ambientes virtuais do Python 3.12+."
+                + "\n  .venv/bin/pip install setuptools"
+            )
+        if any(k in text for k in ("403", "connection", "timeout", "resolve", "network", "ssl", "proxy")):
+            return (
+                base
+                + "\n\nNa primeira execucao o modelo (~3 GB) e baixado de huggingface.co."
+                + "\nVerifique a conexao ou o proxy/firewall da rede e tente de novo."
+            )
+        if "out of memory" in text or "mps" in text:
+            return (
+                base
+                + f"\n\nO modelo esta carregando em '{config.best_device()}'."
+                + " Para forcar a CPU, suba a aplicacao com:"
+                + "\n  SPEECH_CREATOR_DEVICE=cpu ./run.sh"
+            )
+        return base
 
     def warmup(self) -> None:
         self._load()

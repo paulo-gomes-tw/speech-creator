@@ -111,11 +111,22 @@ Combinando os três, cada voz base vira dezenas de personagens distintos.
 Para usar a voz de alguém da banda:
 
 ```bash
-pip install chatterbox-tts
+.venv/bin/pip install chatterbox-tts setuptools
 ```
+
+Instale **dentro do `.venv`** — é o ambiente que o servidor usa; instalar no
+Python do sistema faz o motor aparecer como "não instalado" na interface.
+
+O `setuptools` não é opcional: o `perth` (a marca d'água que o Chatterbox
+aplica no áudio) importa `pkg_resources`, que saiu dos venvs a partir do
+Python 3.12. Sem ele o modelo falha ao carregar com
+`'NoneType' object is not callable`.
 
 Envie uma amostra de 7 a 20 segundos na aba **Projetos**, e escolha o motor
 Chatterbox no elenco. Licença MIT, também gratuito.
+
+Na primeira geração o modelo (~3 GB, bem maior que o do Kokoro) é baixado do
+HuggingFace. A interface avisa que está carregando; é demorado só nessa vez.
 
 > ⚠️ Clone apenas vozes de quem autorizou.
 
