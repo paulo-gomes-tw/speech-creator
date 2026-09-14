@@ -185,6 +185,12 @@ Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
 referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
 o preset também ajusta `exaggeration` e `cfg_weight`.
 
+No Chatterbox a fala vai ao modelo **inteira, numa geração só**: o contorno de
+velocidade por oração e o respiro entre orações não se aplicam. Eles existem
+para encenar emoção num motor que não sabe atuar; quando a entrega vem da
+amostra, fatiar briga com ela — e cada oração custaria uma geração inteira, que
+ali é da ordem de um minuto.
+
 > **"Igualar volume" e os presets.** A normalização acontece *antes* dos ganhos
 > deliberados (seu slider de volume e o do preset). Ela existe para emparelhar
 > vozes diferentes, não para apagar dinâmica proposital — aplicada depois, ela

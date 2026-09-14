@@ -38,6 +38,7 @@ class ChatterboxEngine(Engine):
     )
     supports_cloning = True
     supports_blending = False
+    splits_clauses = False  # a amostra de referencia ja carrega a entrega
     sample_rate = 24000
     install_hint = "pip install chatterbox-tts"
 

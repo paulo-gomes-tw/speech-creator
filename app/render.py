@@ -222,13 +222,21 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
         span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
         emotion = emotions.resolve(span.emotion)
         k = max(0.0, min(1.0, float(span.intensity)))
-        respiro = emotion.clause_pause * k
+        respiro = emotion.clause_pause * k if engine.splits_clauses else 0.0
 
         trecho: list[np.ndarray] = []
         for chunk in split_long_text(span.text):
-            for texto, velocidade in prosody.plan(
-                chunk, span_setting.speed, emotion.contour, emotion.punctuation, k
-            ):
+            if engine.splits_clauses:
+                plano = prosody.plan(
+                    chunk, span_setting.speed, emotion.contour, emotion.punctuation, k
+                )
+            else:
+                # Uma geracao so para o trecho inteiro: quem clona copia a
+                # entrega da amostra, e cada oracao extra custa uma geracao.
+                texto_unico = chunk.strip()
+                plano = [(texto_unico, span_setting.speed)] if texto_unico else []
+
+            for texto, velocidade in plano:
                 part = engine.synth(
                     SynthRequest(
                         text=texto,
