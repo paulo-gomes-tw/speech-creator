@@ -90,15 +90,17 @@ class ChatterboxEngine(Engine):
         text = str(exc).lower()
 
         # O perth (marca d'agua do Chatterbox) importa pkg_resources, que saiu
-        # dos venvs no Python 3.12. O __init__ dele engole o ImportError e
-        # deixa a classe como None, entao o erro que chega aqui nao diz nada.
+        # dos venvs no Python 3.12 e foi removido do setuptools 81+. O __init__
+        # dele engole o ImportError e deixa a classe como None, entao o erro
+        # que chega aqui nao diz nada. Instalar o setuptools mais novo nao
+        # resolve: e preciso uma versao que ainda traga o pkg_resources.
         if "nonetype" in text and "not callable" in text:
             return (
                 base
-                + "\n\nProvavelmente falta o setuptools: o perth (marca d'agua"
-                + " do Chatterbox) importa pkg_resources, que nao vem mais nos"
-                + " ambientes virtuais do Python 3.12+."
-                + "\n  .venv/bin/pip install setuptools"
+                + "\n\nO perth (marca d'agua do Chatterbox) precisa do pkg_resources,"
+                + "\nque saiu dos ambientes virtuais no Python 3.12 e foi removido"
+                + "\ndo setuptools 81+. Instale uma versao que ainda o tenha:"
+                + "\n\n  .venv/bin/pip install \"setuptools<81\""
             )
         if any(k in text for k in ("403", "connection", "timeout", "resolve", "network", "ssl", "proxy")):
             return (

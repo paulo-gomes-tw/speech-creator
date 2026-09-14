@@ -111,16 +111,17 @@ Combinando os três, cada voz base vira dezenas de personagens distintos.
 Para usar a voz de alguém da banda:
 
 ```bash
-.venv/bin/pip install chatterbox-tts setuptools
+.venv/bin/pip install chatterbox-tts "setuptools<81"
 ```
 
 Instale **dentro do `.venv`** — é o ambiente que o servidor usa; instalar no
 Python do sistema faz o motor aparecer como "não instalado" na interface.
 
-O `setuptools` não é opcional: o `perth` (a marca d'água que o Chatterbox
-aplica no áudio) importa `pkg_resources`, que saiu dos venvs a partir do
-Python 3.12. Sem ele o modelo falha ao carregar com
-`'NoneType' object is not callable`.
+O `setuptools` não é opcional, e a **versão importa**: o `perth` (a marca
+d'água que o Chatterbox aplica no áudio) importa `pkg_resources`, que saiu dos
+venvs a partir do Python 3.12 e foi removido do `setuptools` 81+. Instalar o
+mais recente não resolve — é preciso um anterior ao 81. Sem isso o modelo
+falha ao carregar com `'NoneType' object is not callable`.
 
 Envie uma amostra de 7 a 20 segundos na aba **Projetos**, e escolha o motor
 Chatterbox no elenco. Licença MIT, também gratuito.
