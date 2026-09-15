@@ -279,7 +279,11 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
                 # Uma geracao so para o trecho inteiro: quem clona copia a
                 # entrega da amostra, e cada oracao extra custa uma geracao.
                 texto_unico = chunk.strip()
-                plano = [(texto_unico, span_setting.speed)] if texto_unico else []
+                plano = (
+                    [(texto_unico, span_setting.speed)]
+                    if prosody.has_speech(texto_unico)
+                    else []
+                )
 
             for texto, velocidade in plano:
                 part = engine.synth(

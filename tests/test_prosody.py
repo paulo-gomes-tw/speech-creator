@@ -225,3 +225,43 @@ def test_nenhuma_palavra_e_perdida():
     esperado = re.findall(r"[a-z']+", re.sub(r"<[^>]+>", " ", texto).lower())
     obtido = re.findall(r"[a-z']+", " ".join(s.text for s in spans).lower())
     assert obtido == esperado
+
+
+# ------------------------------------------------- fragmentos que alucinam
+
+
+from app.prosody import has_speech  # noqa: E402
+
+
+def test_nao_quebra_uma_frase_em_fragmento_curto():
+    """Fragmento curto faz o modelo preencher o resto com som inventado."""
+    assert split_clauses("Hey, you, over there, listen up now!") == [
+        "Hey, you, over there, listen up now!"
+    ]
+
+
+def test_quebra_de_frase_vem_antes_da_quebra_de_oracao():
+    """Cada pedaco tem de ser, sempre que der, uma frase inteira."""
+    out = split_clauses("Good evening, everyone here. Are you ready to go?")
+    assert out == ["Good evening, everyone here.", "Are you ready to go?"]
+
+
+def test_pedaco_so_de_pontuacao_nao_fica_sozinho():
+    """Ele iria ao modelo sem fonema nenhum, que e quando o som e inventado."""
+    for texto in ("Listen to me carefully. ...", "Ready? ... Here we go now!"):
+        out = split_clauses(texto)
+        assert len(out) == 1 or all(has_speech(p) for p in out)
+
+
+def test_plano_descarta_o_que_nao_se_pronuncia():
+    """Sem fonema para gerar, o modelo inventa um: nao pode chegar la."""
+    assert plan("...", 1.0, (1.0,), "none") == []
+    assert plan("— — —", 1.0, (1.0,), "none") == []
+
+
+def test_has_speech():
+    assert has_speech("oi")
+    assert has_speech("3 vezes")
+    assert not has_speech("...")
+    assert not has_speech("  -- ,;  ")
+    assert not has_speech("")

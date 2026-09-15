@@ -12,6 +12,7 @@ import numpy as np
 
 from .. import config
 from ..audio import as_mono_float32
+from ..prosody import has_speech
 from ..voices import EXTRA_G2P, KOKORO_VOICES, VoiceInfo, lang_of, parse_blend, validate_voice_spec
 from .base import Engine, EngineError, SynthRequest
 
@@ -133,7 +134,9 @@ class KokoroEngine(Engine):
 
     def synth(self, req: SynthRequest) -> np.ndarray:
         text = (req.text or "").strip()
-        if not text:
+        # Texto so com pontuacao nao tem fonema para gerar, e o modelo preenche
+        # o lugar dele com som que nao e palavra.
+        if not has_speech(text):
             return np.zeros(0, dtype=np.float32)
 
         voice_spec = req.voice or "af_heart"

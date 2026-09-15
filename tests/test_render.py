@@ -622,3 +622,36 @@ def test_agressao_na_linha_e_na_tag(tmp_path):
                       cast_for("A"), RenderOptions(per_line_files=False), tmp_path / "a")
     assert m["errors"] == []
     assert len(m["lines"]) == 2
+
+
+# ------------------------------------- nada impronunciavel chega ao modelo
+
+
+def _textos_sintetizados(cue: Cue, setting: VoiceSetting, monkeypatch) -> list[str]:
+    from app.engines import get_engine
+
+    engine = get_engine("fake")
+    vistos: list[str] = []
+    original = engine.synth
+
+    def espiao(req):
+        vistos.append(req.text)
+        return original(req)
+
+    monkeypatch.setattr(engine, "synth", espiao)
+    render_cue(cue, setting, RenderOptions())
+    return vistos
+
+
+def test_modelo_nunca_recebe_texto_sem_fonema(monkeypatch):
+    """Sem nada para pronunciar o modelo inventa som: balbucio ou letra solta."""
+    cue = Cue(kind="speech", text="Listen to me right now. ... Are you still there?")
+    for texto in _textos_sintetizados(cue, fake_setting(), monkeypatch):
+        assert prosody.has_speech(texto)
+
+
+def test_modelo_nao_recebe_fragmento_curto(monkeypatch):
+    """Fragmento solto e a outra metade da mesma alucinacao."""
+    cue = Cue(kind="speech", text="Hey, you, over there, listen up now!")
+    for texto in _textos_sintetizados(cue, fake_setting(), monkeypatch):
+        assert len(texto) >= prosody.MIN_CLAUSE_CHARS

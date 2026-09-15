@@ -22,27 +22,39 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Quebra depois de pontuacao, mantendo-a no fim da oracao.
-CLAUSE_SPLIT = re.compile(r"(?<=[,;:.!?…])\s+")
+# Quebra de frase (pontuacao terminal) e quebra de oracao (virgula e cia).
+# Sao separadas de proposito: o modelo sintetiza um pedaco de cada vez e
+# alucina quando recebe um fragmento curto ou sem frase fechada, entao a
+# quebra dentro da frase so acontece quando sobra texto suficiente dos dois
+# lados.
+SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
+CLAUSE_SPLIT = re.compile(r"(?<=[,;:])\s+")
 
-# Oracao curta demais perde contexto e sai com entonacao pobre; abaixo disso
-# ela e juntada com a vizinha.
-MIN_CLAUSE_CHARS = 14
+# Oracao curta demais perde contexto e sai com entonacao pobre — e, pior, faz
+# o modelo preencher o resto com som que nao e palavra. Abaixo disso ela e
+# juntada com a vizinha.
+MIN_CLAUSE_CHARS = 20
+
+# Um caractere que se le: letra ou numero. Pedaco sem nenhum (so pontuacao,
+# tipo "..." ou "—") nao pode ir ao modelo: sem fonema para gerar, ele inventa
+# um, e o que sai e balbucio ou letra soletrada.
+SPEAKABLE = re.compile(r"[^\W_]", re.UNICODE)
 
 
-def split_clauses(text: str, min_chars: int = MIN_CLAUSE_CHARS) -> list[str]:
-    """Divide em oracoes, juntando as curtas demais para nao picotar a fala."""
-    text = text.strip()
-    if not text:
-        return []
+def has_speech(text: str) -> bool:
+    """Se o texto tem algo para o modelo pronunciar."""
+    return bool(SPEAKABLE.search(text or ""))
 
-    partes = [p.strip() for p in CLAUSE_SPLIT.split(text) if p.strip()]
-    if len(partes) <= 1:
-        return [text]
 
+def _merge_short(partes: list[str], min_chars: int) -> list[str]:
+    """Cola os pedacos curtos (ou impronunciaveis) no vizinho."""
     juntadas: list[str] = []
     for parte in partes:
-        if juntadas and len(juntadas[-1]) < min_chars:
+        if juntadas and (
+            len(juntadas[-1]) < min_chars
+            or not has_speech(juntadas[-1])
+            or not has_speech(parte)
+        ):
             juntadas[-1] = f"{juntadas[-1]} {parte}"
         else:
             juntadas.append(parte)
@@ -50,10 +62,33 @@ def split_clauses(text: str, min_chars: int = MIN_CLAUSE_CHARS) -> list[str]:
     # A ultima tambem nao pode ficar solta e curta. O pop tem de vir antes da
     # indexacao: fazer os dois na mesma expressao encurta a lista e estoura o
     # indice quando sobram exatamente duas oracoes.
-    if len(juntadas) > 1 and len(juntadas[-1]) < min_chars:
+    while len(juntadas) > 1 and (
+        len(juntadas[-1]) < min_chars or not has_speech(juntadas[-1])
+    ):
         ultima = juntadas.pop()
         juntadas[-1] = f"{juntadas[-1]} {ultima}"
     return juntadas
+
+
+def split_clauses(text: str, min_chars: int = MIN_CLAUSE_CHARS) -> list[str]:
+    """Divide em oracoes, juntando as curtas demais para nao picotar a fala.
+
+    Quebra primeiro nas frases e so depois dentro delas: assim o pedaco que
+    vai ao modelo e, sempre que da, uma frase inteira — que e o que ele sabe
+    sintetizar sem inventar som no fim.
+    """
+    text = text.strip()
+    if not text:
+        return []
+
+    oracoes: list[str] = []
+    for frase in (f.strip() for f in SENTENCE_SPLIT.split(text)):
+        if not frase:
+            continue
+        partes = [p.strip() for p in CLAUSE_SPLIT.split(frase) if p.strip()]
+        oracoes.extend(_merge_short(partes, min_chars))
+
+    return _merge_short(oracoes, min_chars) or [text]
 
 
 def speed_curve(n: int, contour: tuple[float, ...]) -> list[float]:
@@ -141,7 +176,11 @@ def plan(
     if not text:
         return []
 
-    clauses = split_clauses(text)
+    # Pedaco sem nada pronunciavel nao vai ao modelo: ele responderia com som
+    # inventado no lugar do silencio que se esperava.
+    clauses = [c for c in split_clauses(text) if has_speech(c)]
+    if not clauses:
+        return []
     curva = speed_curve(len(clauses), contour)
     intensity = float(np.clip(intensity, 0.0, 1.0))
 

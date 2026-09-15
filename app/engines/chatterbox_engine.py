@@ -14,6 +14,7 @@ import numpy as np
 
 from .. import config
 from ..audio import as_mono_float32
+from ..prosody import has_speech
 from ..voices import VoiceInfo
 from .base import Engine, EngineError, SynthRequest
 
@@ -129,7 +130,8 @@ class ChatterboxEngine(Engine):
 
     def synth(self, req: SynthRequest) -> np.ndarray:
         text = (req.text or "").strip()
-        if not text:
+        # Sem nada pronunciavel o modelo nao fica em silencio: ele alucina.
+        if not has_speech(text):
             return np.zeros(0, dtype=np.float32)
 
         if not req.ref_audio:
@@ -142,7 +144,9 @@ class ChatterboxEngine(Engine):
             model = self._load()
             kwargs = {
                 "audio_prompt_path": str(ref),
-                "exaggeration": float(np.clip(req.params.get("exaggeration", 0.5), 0.25, 2.0)),
+                # Acima de ~1.5 a expressividade deixa de ser entrega e vira
+                # alucinacao: o modelo atropela o texto e inventa palavras.
+                "exaggeration": float(np.clip(req.params.get("exaggeration", 0.5), 0.25, 1.5)),
                 "cfg_weight": float(np.clip(req.params.get("cfg_weight", 0.5), 0.0, 1.0)),
                 "temperature": float(np.clip(req.params.get("temperature", 0.8), 0.05, 2.0)),
             }

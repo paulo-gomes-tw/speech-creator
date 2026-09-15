@@ -59,7 +59,7 @@ OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
     # Parametros do proprio motor, com os mesmos limites que ele aplica. Vao
     # para `params` em vez de virarem campo do falante.
     "temperature": (0.05, 2.0),
-    "exaggeration": (0.25, 2.0),
+    "exaggeration": (0.25, 1.5),
     "cfg_weight": (0.0, 1.0),
 }
 

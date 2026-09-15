@@ -274,7 +274,7 @@ function renderCast() {
         <div class="three">
           <label class="field">
             <span>Expressividade <b class="slider-val">${(c.params?.exaggeration ?? 0.5).toFixed(2)}</b></span>
-            <input type="range" data-p="exaggeration" data-sp="${esc(sp)}" min="0.25" max="2" step="0.05" value="${c.params?.exaggeration ?? 0.5}">
+            <input type="range" data-p="exaggeration" data-sp="${esc(sp)}" min="0.25" max="1.5" step="0.05" value="${c.params?.exaggeration ?? 0.5}">
           </label>
           <label class="field">
             <span>Aderência (cfg) <b class="slider-val">${(c.params?.cfg_weight ?? 0.5).toFixed(2)}</b></span>

@@ -57,6 +57,9 @@ class Emotion:
     aggression: float = 0.0
 
     # --- expressividade do Chatterbox, que tem emocao nativa ---
+    # A faixa util vai ate ~1.0/1.2: acima disso o modelo para de interpretar e
+    # comeca a alucinar — atropela o texto, inventa palavra e soletra letra.
+    # Por isso nenhum preset chega perto do maximo que o slider aceita.
     exaggeration: float | None = None
     cfg_weight: float | None = None
 
@@ -77,7 +80,7 @@ EMOTIONS: tuple[Emotion, ...] = (
         speed_mult=1.18, contour=(1.0, 1.14), clause_pause=0.0,
         punctuation="clipped", volume_delta=4.5, gap_mult=0.60,
         brightness_delta=2.5,
-        exaggeration=1.3, cfg_weight=0.4,
+        exaggeration=0.8, cfg_weight=0.45,
     ),
     Emotion(
         "revoltado", "Revoltado",
@@ -85,7 +88,7 @@ EMOTIONS: tuple[Emotion, ...] = (
         speed_mult=1.24, contour=(1.02, 1.18), clause_pause=0.0,
         punctuation="emphatic", volume_delta=6.0, gap_mult=0.50,
         brightness_delta=3.0, aggression=0.40,
-        exaggeration=1.7, cfg_weight=0.32,
+        exaggeration=0.95, cfg_weight=0.4,
     ),
     Emotion(
         "furioso", "Furioso (muito raivoso)",
@@ -93,7 +96,7 @@ EMOTIONS: tuple[Emotion, ...] = (
         speed_mult=1.30, contour=(1.05, 1.24), clause_pause=0.0,
         punctuation="clipped", volume_delta=7.5, gap_mult=0.42,
         brightness_delta=3.0, aggression=0.85,
-        exaggeration=2.0, cfg_weight=0.25,
+        exaggeration=1.1, cfg_weight=0.35,
     ),
     Emotion(
         "indiferente", "Indiferente",
@@ -117,7 +120,7 @@ EMOTIONS: tuple[Emotion, ...] = (
         speed_mult=1.20, contour=(1.0, 1.10), clause_pause=0.0,
         punctuation="emphatic", volume_delta=3.5, gap_mult=0.70,
         brightness_delta=2.5,
-        exaggeration=1.2, cfg_weight=0.45,
+        exaggeration=0.75, cfg_weight=0.45,
     ),
     Emotion(
         "sombrio", "Sombrio",

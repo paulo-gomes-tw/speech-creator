@@ -358,9 +358,13 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | `effect` | `efeito` | nome | efeito de voz |
 | `effect_amount` | `intensidade` | 0 – 1 | intensidade do efeito |
 | `ref_audio` | `amostra` | nome | amostra de referência só nesta fala |
-| `exaggeration` | `expressividade` | 0.25 – 2.0 | expressividade do Chatterbox |
+| `exaggeration` | `expressividade` | 0.25 – 1.5 | expressividade do Chatterbox |
 | `cfg_weight` | `aderencia` | 0 – 1 | o quanto adere à referência |
 | `temperature` | `temperatura` | 0.05 – 2.0 | variação de amostragem |
+
+Acima de ~1.2 de `expressividade` o Chatterbox para de interpretar e começa a
+alucinar — atropela o texto, inventa palavra e chega a soletrar letra —, por
+isso o teto é 1.5 e nenhum preset de tom chega perto dele.
 
 Os quatro últimos valem só para motores que clonam voz. O `ref_audio` recebe o
 **nome** de uma amostra da aba Projetos (`voz_cansada.wav`), não um caminho —
