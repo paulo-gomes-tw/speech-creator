@@ -357,6 +357,22 @@ Ajustes aceitos em `( )`, em inglês ou português:
 | `aggression` | `agressividade` | 0 – 1 | grito/esgoelamento |
 | `effect` | `efeito` | nome | efeito de voz |
 | `effect_amount` | `intensidade` | 0 – 1 | intensidade do efeito |
+| `ref_audio` | `amostra` | nome | amostra de referência só nesta fala |
+| `exaggeration` | `expressividade` | 0.25 – 2.0 | expressividade do Chatterbox |
+| `cfg_weight` | `aderencia` | 0 – 1 | o quanto adere à referência |
+| `temperature` | `temperatura` | 0.05 – 2.0 | variação de amostragem |
+
+Os quatro últimos valem só para motores que clonam voz. O `ref_audio` recebe o
+**nome** de uma amostra da aba Projetos (`voz_cansada.wav`), não um caminho —
+nome com barra ou `..` é recusado com aviso.
+
+> **Amostra por fala é o controle mais forte que existe nesses motores.** O
+> Chatterbox copia a entrega do áudio de referência; `exaggeration` e
+> `cfg_weight` só modulam em torno dela. Duas perguntas com o mesmo texto e a
+> mesma amostra saem com a mesma entonação por mais que se mexa nos números —
+> é trocando a amostra que a entrega muda. O `temperature` ajuda no caso
+> específico de falas de texto idêntico, dando variação de amostragem entre
+> elas.
 
 ---
 

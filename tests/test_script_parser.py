@@ -157,6 +157,38 @@ def test_presets_convivem_com_ajustes_numericos():
     assert r.cues[0].overrides == {"emotion": "raivoso", "speed": 1.5, "pitch": -2.0}
 
 
+def test_amostra_por_fala():
+    r = parse_script("[MC](ref_audio=voz_cansada.wav) oi")
+    assert r.cues[0].overrides == {"ref_audio": "voz_cansada.wav"}
+    assert r.warnings == []
+
+
+@pytest.mark.parametrize("valor", ["pasta/voz.wav", "../../etc/passwd", "..", "/etc/passwd"])
+def test_amostra_com_caminho_e_recusada(valor):
+    """O roteiro nomeia uma amostra; nao aponta para um arquivo do disco."""
+    r = parse_script(f"[MC](ref_audio={valor}) oi")
+    assert r.cues[0].overrides == {}
+    assert any("nao e um nome de amostra valido" in w for w in r.warnings)
+
+
+def test_params_do_motor_por_fala():
+    r = parse_script("[MC](temperature=1.1, exaggeration=0.45, cfg_weight=0.3) oi")
+    assert r.cues[0].overrides == {"temperature": 1.1, "exaggeration": 0.45, "cfg_weight": 0.3}
+
+
+def test_params_do_motor_respeitam_os_limites():
+    r = parse_script("[MC](temperature=9, exaggeration=0.01) oi")
+    assert r.cues[0].overrides == {"temperature": 2.0, "exaggeration": 0.25}
+    assert sum("fora da faixa" in w for w in r.warnings) == 2
+
+
+def test_alias_com_acento_e_lido():
+    """`emoção` e `força` estao na tabela de aliases e precisam casar."""
+    r = parse_script("[MC](emoção=cansado, força=0.4) oi")
+    assert r.cues[0].overrides == {"emotion": "cansado", "emotion_intensity": 0.4}
+    assert r.warnings == []
+
+
 def test_tag_de_tom_desconhecida_vira_aviso():
     r = parse_script("[A] Teste <raivosoo> errado")
     assert any("<raivosoo>" in w for w in r.warnings)

@@ -12,7 +12,7 @@ import numpy as np
 from . import audio as A
 from . import config, effects, emotions, prosody
 from .engines import EngineError, get_engine
-from .script_parser import Cue, parse_script, split_long_text
+from .script_parser import ENGINE_PARAMS, Cue, parse_script, split_long_text
 
 ProgressFn = Callable[[int, int, str], None]
 
@@ -107,10 +107,29 @@ def _with_emotion(
     do resto: o que esta no roteiro vale mais do que a configuracao do falante.
     """
     merged = emotions.apply(setting.to_dict(), emotion_id, intensity, from_script)
+    params = dict(merged.get("params") or {})
     for key, value in overrides.items():
-        if key != "emotion" and key in merged:
+        if key in ENGINE_PARAMS:
+            # Escrito na linha, entao vence ate o que o preset acabou de por.
+            params[key] = float(value)
+        elif key == "ref_audio":
+            merged[key] = _ref_path(str(value)) or merged[key]
+        elif key != "emotion" and key in merged:
             merged[key] = value
+    merged["params"] = params
     return VoiceSetting.from_dict(merged)
+
+
+def _ref_path(name: str) -> str | None:
+    """Caminho da amostra nomeada no roteiro, presa a pasta de amostras.
+
+    O parser ja recusa nome com separador, entao um nome que escape daqui so
+    chega por uso programatico; nesse caso o ajuste e descartado em vez de
+    virar leitura de um arquivo qualquer do disco.
+    """
+    raiz = config.REFS_DIR.resolve()
+    alvo = (raiz / name).resolve()
+    return str(alvo) if alvo.is_relative_to(raiz) else None
 
 
 def _emotion_from_script(cue: Cue, span_emotion: str, raw: VoiceSetting) -> bool:
