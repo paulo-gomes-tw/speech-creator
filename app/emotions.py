@@ -182,12 +182,24 @@ def is_known(emotion_id: str) -> bool:
     return ALIASES.get(key, key) in BY_ID
 
 
-def apply(settings: dict, emotion_id: str | None, intensity: float = 1.0) -> dict:
+def apply(
+    settings: dict,
+    emotion_id: str | None,
+    intensity: float = 1.0,
+    force_params: bool = False,
+) -> dict:
     """Aplica o preset sobre a configuracao de um falante.
 
     `intensity` de 0 a 1 dosa o quanto o preset pesa, sem trocar de preset.
     O tom (pitch) nunca e alterado aqui: preservar os formantes e o que
     mantem a voz reconhecivel.
+
+    `force_params` decide quem ganha nos params nativos do motor
+    (`exaggeration`, `cfg_weight`): com ele o preset sobrescreve o que estiver
+    configurado no falante. E o que se quer quando o tom veio escrito no
+    roteiro, que e a indicacao mais especifica. Sem ele o valor do falante
+    permanece, senao o preset herdado apagaria os sliders da interface a cada
+    renderizacao.
     """
     emotion = resolve(emotion_id)
     k = max(0.0, min(1.0, float(intensity)))
@@ -209,10 +221,13 @@ def apply(settings: dict, emotion_id: str | None, intensity: float = 1.0) -> dic
         out["gap"] = round(float(gap) * (1.0 + (emotion.gap_mult - 1.0) * k), 4)
 
     params = dict(out.get("params") or {})
-    if emotion.exaggeration is not None:
-        params.setdefault("exaggeration", emotion.exaggeration)
-    if emotion.cfg_weight is not None:
-        params.setdefault("cfg_weight", emotion.cfg_weight)
+    for chave, valor in (("exaggeration", emotion.exaggeration), ("cfg_weight", emotion.cfg_weight)):
+        if valor is None:
+            continue
+        if force_params:
+            params[chave] = valor
+        else:
+            params.setdefault(chave, valor)
     out["params"] = params
 
     out["emotion"] = emotion.id

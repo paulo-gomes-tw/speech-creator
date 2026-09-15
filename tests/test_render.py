@@ -8,8 +8,17 @@ import numpy as np
 import pytest
 
 from app import audio as A
+from app import emotions, prosody
 from app.engines import EngineError
-from app.render import RenderOptions, VoiceSetting, render_cue, render_script
+from app.render import (
+    RenderOptions,
+    VoiceSetting,
+    _emotion_from_script,
+    _resolve,
+    _with_emotion,
+    render_cue,
+    render_script,
+)
 from app.script_parser import Cue
 
 
@@ -102,6 +111,33 @@ def test_ajustes_inline_sobrepoem_o_elenco(tmp_path):
     a = render_script(script_lento, cast_for("Ana", speed=1.0), opts, tmp_path / "a")
     b = render_script(script_rapido, cast_for("Ana", speed=1.0), RenderOptions(normalize=False, per_line_files=False), tmp_path / "b")
     assert a["duration"] > b["duration"] * 2
+
+
+def test_emocao_da_linha_sobrepoe_os_params_do_falante():
+    """`(emotion=...)` tambem manda nos params nativos do motor."""
+    falante = fake_setting(speaker="Ana", params={"exaggeration": 0.9, "cfg_weight": 0.55})
+
+    herdado = _resolve(falante, {})
+    assert herdado.params["exaggeration"] == 0.9
+
+    do_roteiro = _resolve(falante, {"emotion": "revoltado"})
+    assert do_roteiro.params["exaggeration"] == emotions.resolve("revoltado").exaggeration
+    assert do_roteiro.params["cfg_weight"] == emotions.resolve("revoltado").cfg_weight
+
+
+def test_tag_de_tom_sobrepoe_os_params_so_no_trecho_marcado():
+    """`<tom>` vale para o seu trecho; o resto da fala fica com o falante."""
+    falante = fake_setting(speaker="Ana", params={"exaggeration": 0.9})
+    texto = "When did you realize <sombrio>you were following its decisions?"
+
+    cue = Cue(kind="speech", speaker="Ana", text=texto)
+    resultado = {}
+    for span in prosody.split_spans(texto, falante.emotion, falante.emotion_intensity):
+        forcar = _emotion_from_script(cue, span.emotion, falante)
+        resultado[span.emotion] = _with_emotion(falante, {}, span.emotion, span.intensity, forcar)
+
+    assert resultado["neutro"].params["exaggeration"] == 0.9
+    assert resultado["sombrio"].params["exaggeration"] == emotions.resolve("sombrio").exaggeration
 
 
 # ---------------------------------------------------------------- render_script
