@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from app import audio as A
-from app import emotions, prosody
+from app import config, emotions, prosody
 from app.engines import EngineError
 from app.render import (
     RenderOptions,
@@ -123,6 +123,27 @@ def test_emocao_da_linha_sobrepoe_os_params_do_falante():
     do_roteiro = _resolve(falante, {"emotion": "revoltado"})
     assert do_roteiro.params["exaggeration"] == emotions.resolve("revoltado").exaggeration
     assert do_roteiro.params["cfg_weight"] == emotions.resolve("revoltado").cfg_weight
+
+
+def test_params_do_motor_na_linha_vencem_o_preset():
+    falante = fake_setting(speaker="Ana", params={"exaggeration": 0.9})
+    s = _resolve(falante, {"emotion": "raivoso", "exaggeration": 0.4, "temperature": 1.2})
+    assert s.params["exaggeration"] == 0.4   # nem o falante nem o preset
+    assert s.params["temperature"] == 1.2
+    assert s.params["cfg_weight"] == emotions.resolve("raivoso").cfg_weight
+
+
+def test_amostra_da_linha_e_resolvida_na_pasta_de_amostras():
+    falante = fake_setting(speaker="Ana", ref_audio="/qualquer/padrao.wav")
+    s = _resolve(falante, {"ref_audio": "voz_cansada.wav"})
+    assert s.ref_audio == str(config.REFS_DIR.resolve() / "voz_cansada.wav")
+
+
+def test_amostra_que_escapa_da_pasta_e_descartada():
+    """Defesa em profundidade: o parser ja recusa, isto cobre uso programatico."""
+    falante = fake_setting(speaker="Ana", ref_audio="/qualquer/padrao.wav")
+    s = _resolve(falante, {"ref_audio": "../../../etc/passwd"})
+    assert s.ref_audio == "/qualquer/padrao.wav"
 
 
 def test_tag_de_tom_sobrepoe_os_params_so_no_trecho_marcado():

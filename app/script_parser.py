@@ -6,10 +6,15 @@ Sintaxe suportada::
 
     [Narrador] Boa noite, Sao Paulo!
     [Vocalista](speed=1.1, pitch=-2) A proxima e pra voces.
+    [Vocalista](ref_audio=voz_cansada.wav, temperature=1.0) E essa aqui doi.
     [pausa 2.5]
     [Narrador]
     Sem texto na mesma linha, o bloco continua
     ate o proximo marcador.
+
+Motores que clonam voz aceitam uma amostra por fala (`ref_audio=`), o que
+permite entregas diferentes no mesmo personagem — e o que mais muda a
+entonacao nesses motores, mais do que qualquer ajuste numerico.
 
 Marcadores de pausa aceitam `pausa`, `pause` ou `silencio`, com o tempo em
 segundos (`[pausa 2]`, `[pause 1.5s]`).
@@ -23,10 +28,22 @@ from dataclasses import dataclass, field
 # [Falante] ou [Falante](chave=valor, ...) no inicio da linha
 SPEAKER_RE = re.compile(r"^\s*\[([^\]\n]+?)\]\s*(?:\(([^)]*)\))?\s*(.*)$")
 PAUSE_RE = re.compile(r"^(?:pausa|pause|silencio|sil[eê]ncio)\s*([0-9]*[.,]?[0-9]+)?\s*s?$", re.IGNORECASE)
-OVERRIDE_RE = re.compile(r"([a-zA-Z_]+)\s*=\s*(-?[0-9]*\.?[0-9]+|[A-Za-z][\w-]*)")
+# O valor vai ate a proxima virgula, inteiro, em vez de so a parte bem
+# formada: assim um `ref_audio=pasta/voz.wav` chega completo na validacao e e
+# recusado com aviso, em vez de virar um `ref_audio=pasta` silencioso. A chave
+# usa `\w`, que em str casa letra acentuada — sem isso os aliases com acento
+# (`emoção`, `força`) nunca chegavam a ser lidos.
+OVERRIDE_RE = re.compile(r"(\w+)\s*=\s*([^,]+)")
 
 # Ajustes que recebem o nome de um preset, nao um numero.
 WORD_OVERRIDES = {"emotion", "effect"}
+
+# Nome de arquivo de uma amostra de referencia, resolvido na renderizacao
+# contra a pasta de amostras. Aqui so se valida o formato: um nome simples,
+# sem separador de caminho, para que o roteiro nao consiga apontar para fora
+# dela.
+FILE_OVERRIDES = {"ref_audio"}
+SAFE_FILENAME_RE = re.compile(r"^[\w][\w.-]*$")
 
 # Ajustes numericos aceitos por fala, com limites que evitam valores absurdos.
 OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
@@ -39,7 +56,15 @@ OVERRIDE_BOUNDS: dict[str, tuple[float, float]] = {
     "effect_amount": (0.0, 1.0),
     "emotion_intensity": (0.0, 1.0),
     "aggression": (0.0, 1.0),
+    # Parametros do proprio motor, com os mesmos limites que ele aplica. Vao
+    # para `params` em vez de virarem campo do falante.
+    "temperature": (0.05, 2.0),
+    "exaggeration": (0.25, 2.0),
+    "cfg_weight": (0.0, 1.0),
 }
+
+# Destes, quem cuida e o motor: a renderizacao os encaminha em `params`.
+ENGINE_PARAMS = {"temperature", "exaggeration", "cfg_weight"}
 
 # Aliases em portugues, para o roteiro poder ser escrito no idioma do usuario.
 OVERRIDE_ALIASES = {
@@ -61,6 +86,13 @@ OVERRIDE_ALIASES = {
     "agressividade": "aggression",
     "agressao": "aggression",
     "agressão": "aggression",
+    "amostra": "ref_audio",
+    "referencia": "ref_audio",
+    "referência": "ref_audio",
+    "temperatura": "temperature",
+    "expressividade": "exaggeration",
+    "aderencia": "cfg_weight",
+    "aderência": "cfg_weight",
 }
 
 
@@ -124,13 +156,24 @@ def _parse_overrides(raw: str | None, line_no: int, warnings: list[str]) -> dict
     out: dict[str, float | str] = {}
     for key, value in OVERRIDE_RE.findall(raw):
         name = OVERRIDE_ALIASES.get(key.lower(), key.lower())
+        value = value.strip()
 
         if name in WORD_OVERRIDES:
             known = emotions.is_known if name == "emotion" else effects.is_known
             if not known(value):
                 warnings.append(f"Linha {line_no}: {name} '{value}' nao existe, ignorado.")
                 continue
-            out[name] = value.strip().lower()
+            out[name] = value.lower()
+            continue
+
+        if name in FILE_OVERRIDES:
+            if not SAFE_FILENAME_RE.match(value) or ".." in value:
+                warnings.append(
+                    f"Linha {line_no}: '{name}={value}' nao e um nome de amostra valido."
+                    " Use so o nome do arquivo, como esta na aba Projetos."
+                )
+                continue
+            out[name] = value
             continue
 
         if name not in OVERRIDE_BOUNDS:
