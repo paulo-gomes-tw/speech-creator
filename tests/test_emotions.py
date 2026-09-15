@@ -86,9 +86,17 @@ def test_gap_none_continua_herdando():
     assert E.apply(base(gap=None), "cansado")["gap"] is None
 
 
-def test_params_do_usuario_vencem_o_preset():
+def test_params_do_usuario_vencem_o_preset_herdado():
+    """Tom herdado do falante nao apaga os params que ele proprio configurou."""
     out = E.apply(base(params={"exaggeration": 0.9}), "raivoso")
     assert out["params"]["exaggeration"] == 0.9
+
+
+def test_preset_do_roteiro_vence_os_params_do_falante():
+    """Tom escrito no roteiro e a indicacao mais especifica, entao sobrescreve."""
+    out = E.apply(base(params={"exaggeration": 0.9}), "raivoso", force_params=True)
+    assert out["params"]["exaggeration"] == E.resolve("raivoso").exaggeration
+    assert out["params"]["cfg_weight"] == E.resolve("raivoso").cfg_weight
 
 
 def test_aliases_em_ingles():

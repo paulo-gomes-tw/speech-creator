@@ -84,22 +84,42 @@ def _resolve(setting: VoiceSetting, overrides: dict[str, float | str]) -> VoiceS
     """
     emotion_id = overrides.get("emotion", setting.emotion)
     intensity = overrides.get("emotion_intensity", setting.emotion_intensity)
-    return _with_emotion(setting, overrides, str(emotion_id), float(intensity))
+    return _with_emotion(
+        setting, overrides, str(emotion_id), float(intensity), "emotion" in overrides
+    )
 
 
 def _with_emotion(
-    setting: VoiceSetting, overrides: dict[str, float | str], emotion_id: str, intensity: float
+    setting: VoiceSetting,
+    overrides: dict[str, float | str],
+    emotion_id: str,
+    intensity: float,
+    from_script: bool = False,
 ) -> VoiceSetting:
     """Igual ao `_resolve`, mas com o tom dado de fora.
 
     Os trechos marcados com `<tom>` dentro de uma fala usam este caminho: cada
     um recebe o seu preset, mantendo os ajustes numericos escritos na linha.
+
+    `from_script` diz que o tom foi escrito no roteiro — como `emotion=` na
+    linha ou uma tag `<tom>` —, e nao herdado do falante. Nesse caso o preset
+    tambem sobrescreve os params nativos do motor, seguindo a mesma precedencia
+    do resto: o que esta no roteiro vale mais do que a configuracao do falante.
     """
-    merged = emotions.apply(setting.to_dict(), emotion_id, intensity)
+    merged = emotions.apply(setting.to_dict(), emotion_id, intensity, from_script)
     for key, value in overrides.items():
         if key != "emotion" and key in merged:
             merged[key] = value
     return VoiceSetting.from_dict(merged)
+
+
+def _emotion_from_script(cue: Cue, span_emotion: str, raw: VoiceSetting) -> bool:
+    """Se o tom de um trecho veio do roteiro, e nao do falante.
+
+    Fonte unica dessa regra: a renderizacao e a previa da linha do tempo
+    chamam esta funcao, para nao divergirem.
+    """
+    return "emotion" in cue.overrides or span_emotion != raw.emotion
 
 
 def effective_gap(
@@ -159,7 +179,10 @@ def timeline(
         # Trechos com tom proprio, para a interface mostrar o que muda onde.
         trechos = []
         for span in prosody.split_spans(cue.text, setting.emotion, setting.emotion_intensity):
-            span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
+            span_setting = _with_emotion(
+                raw, cue.overrides, span.emotion, span.intensity,
+                _emotion_from_script(cue, span.emotion, raw),
+            )
             trechos.append({
                 "emotion": emotions.resolve(span.emotion).id,
                 "text": span.text,
@@ -219,7 +242,10 @@ def render_cue(cue: Cue, setting: VoiceSetting, opts: RenderOptions) -> tuple[np
 
     pieces: list[np.ndarray] = []
     for span in spans:
-        span_setting = _with_emotion(raw, cue.overrides, span.emotion, span.intensity)
+        span_setting = _with_emotion(
+            raw, cue.overrides, span.emotion, span.intensity,
+            _emotion_from_script(cue, span.emotion, raw),
+        )
         emotion = emotions.resolve(span.emotion)
         k = max(0.0, min(1.0, float(span.intensity)))
         respiro = emotion.clause_pause * k if engine.splits_clauses else 0.0
