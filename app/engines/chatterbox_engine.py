@@ -27,6 +27,11 @@ LANGUAGES = {
     "he": "Hebraico", "ms": "Malaio", "sw": "Suaili",
 }
 
+# Usado quando o falante nao diz o idioma. Tem de continuar igual ao padrao do
+# campo Idioma na interface: divergir faz a tela prometer um idioma e o modelo
+# sintetizar noutro, o que sai como sotaque.
+DEFAULT_LANGUAGE = "en"
+
 
 class ChatterboxEngine(Engine):
     id = "chatterbox"
@@ -142,7 +147,7 @@ class ChatterboxEngine(Engine):
                 "temperature": float(np.clip(req.params.get("temperature", 0.8), 0.05, 2.0)),
             }
             if self._multilingual:
-                kwargs["language_id"] = req.lang or req.params.get("language_id", "pt")
+                kwargs["language_id"] = req.lang or req.params.get("language_id", DEFAULT_LANGUAGE)
 
             try:
                 wav = model.generate(text, **kwargs)
