@@ -173,6 +173,13 @@ Para emoção atuada de verdade, use o motor **Chatterbox** com uma amostra de
 referência já falada naquela emoção — ele copia a entrega do áudio. Nesse caso
 o preset também ajusta `exaggeration` e `cfg_weight`.
 
+> **Quem vence.** Um tom escrito no roteiro — `emotion=` na linha ou uma tag
+> `<tom>` — sobrescreve o `exaggeration` e o `cfg_weight` configurados no
+> falante: a indicação mais específica manda. Já o tom herdado do próprio
+> falante respeita esses valores, senão os sliders da interface nunca teriam
+> efeito. Numa fala com tags, cada trecho decide sozinho: o texto sem tag
+> continua com os valores do falante.
+
 > **"Igualar volume" e os presets.** A normalização acontece *antes* dos ganhos
 > deliberados (seu slider de volume e o do preset). Ela existe para emparelhar
 > vozes diferentes, não para apagar dinâmica proposital — aplicada depois, ela
