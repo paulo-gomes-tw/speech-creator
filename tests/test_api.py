@@ -140,6 +140,33 @@ def test_download_antes_de_terminar(client):
     assert client.get("/api/jobs/naoexiste/download").status_code == 404
 
 
+def test_download_sobrevive_ao_job_sair_da_memoria(client):
+    """Os audios ficam no disco; o registro em memoria tem teto e some no restart."""
+    job = client.post("/api/render", json={
+        "script": "[A] hello there\n[A] second line",
+        "cast": fake_cast("A"),
+    }).json()
+    m = wait_for_job(client, job["id"])["manifest"]
+
+    from app.jobs import manager
+    with manager._lock:
+        del manager._jobs[job["id"]]
+    assert manager.get(job["id"]) is None
+
+    fala = client.get(f"/api/jobs/{job['id']}/file/{m['lines'][0]['file']}")
+    assert fala.status_code == 200 and fala.content[:4] == b"RIFF"
+
+    dl = client.get(f"/api/jobs/{job['id']}/download?format=wav")
+    assert dl.status_code == 200
+
+
+@pytest.mark.parametrize("caminho", ["../../../etc/passwd", "..%2F..%2Fetc%2Fpasswd"])
+def test_arquivo_de_job_nao_escapa_da_pasta(client, caminho):
+    job = client.post("/api/render", json={"script": "[A] hello", "cast": fake_cast("A")}).json()
+    wait_for_job(client, job["id"])
+    assert client.get(f"/api/jobs/{job['id']}/file/{caminho}").status_code == 404
+
+
 def test_lista_jobs(client, sample_script):
     job = client.post("/api/render", json={"script": "[A] hello", "cast": fake_cast("A")}).json()
     wait_for_job(client, job["id"])

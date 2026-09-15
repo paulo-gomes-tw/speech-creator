@@ -177,12 +177,41 @@ def api_job_cancel(job_id: str) -> dict:
     return {"ok": True}
 
 
+JOB_ID_RE = re.compile(r"^[0-9a-f]{1,32}$")
+
+
+def _job_dir(job_id: str) -> Path:
+    """Pasta de saida de um job, esteja ele na memoria ou nao.
+
+    O registro em memoria tem teto e se perde num restart, mas os audios
+    continuam no disco, e a pasta deriva do id. Enquanto isto dependia do
+    registro, o download morria junto com a entrada em memoria embora o WAV
+    ainda estivesse la.
+    """
+    if not JOB_ID_RE.match(job_id):
+        raise HTTPException(status_code=404, detail="Job nao encontrado.")
+    job = manager.get(job_id)
+    root = Path(job.out_dir) if job else config.OUTPUT_DIR / job_id
+    root = root.resolve()
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail="Job nao encontrado.")
+    return root
+
+
+def _job_manifest(job_id: str) -> dict:
+    """Manifesto do job, do registro em memoria ou do disco."""
+    job = manager.get(job_id)
+    if job and job.manifest:
+        return job.manifest
+    path = _job_dir(job_id) / "manifest.json"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Renderizacao ainda nao concluida.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _job_file(job_id: str, rel_path: str) -> Path:
     """Resolve um arquivo dentro da pasta do job, barrando path traversal."""
-    job = manager.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job nao encontrado.")
-    root = Path(job.out_dir).resolve()
+    root = _job_dir(job_id)
     target = (root / rel_path).resolve()
     if not target.is_relative_to(root) or not target.is_file():
         raise HTTPException(status_code=404, detail="Arquivo nao encontrado.")
@@ -198,14 +227,14 @@ def api_job_file(job_id: str, rel_path: str) -> FileResponse:
 
 @app.get("/api/jobs/{job_id}/download")
 def api_job_download(job_id: str, format: str = "wav") -> FileResponse:
-    job = manager.get(job_id)
-    if not job or not job.manifest:
-        raise HTTPException(status_code=404, detail="Renderizacao ainda nao concluida.")
-    rel = job.manifest["files"].get(format)
+    manifest = _job_manifest(job_id)
+    rel = manifest["files"].get(format)
     if not rel:
         raise HTTPException(status_code=404, detail=f"Formato '{format}' nao foi gerado.")
     path = _job_file(job_id, rel)
-    safe_title = re.sub(r"[^\w\- ]", "", job.title).strip() or "show"
+    job = manager.get(job_id)
+    safe_title = re.sub(r"[^\w\- ]", "", job.title).strip() if job else ""
+    safe_title = safe_title or "show"
     return FileResponse(
         path,
         media_type="audio/mpeg" if format == "mp3" else "audio/wav",
