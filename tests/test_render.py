@@ -35,7 +35,7 @@ def cast_for(*speakers, **kw) -> dict[str, VoiceSetting]:
 
 def test_render_cue_produz_audio():
     wav, sr = render_cue(Cue(kind="speech", text="Good evening everyone"), fake_setting(), RenderOptions())
-    assert sr == 24000 and len(wav) > 0
+    assert sr == 44100 and len(wav) > 0
     assert wav.dtype == np.float32 and np.max(np.abs(wav)) <= 1.0
 
 
@@ -258,7 +258,7 @@ def test_manifesto_e_json_valido(sample_script, tmp_path):
     out = tmp_path / "j"
     render_script(sample_script, cast_for("Announcer", "Singer", "Guitarist"), RenderOptions(), out)
     data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    assert data["sample_rate"] == 24000 and data["duration"] > 0
+    assert data["sample_rate"] == 44100 and data["duration"] > 0
 
 
 def test_voice_setting_ignora_campos_desconhecidos():

@@ -59,7 +59,10 @@ class RenderOptions:
     lead_out: float = 1.0
     default_gap: float = 0.6
     limit: bool = True           # limitador suave no mix final
-    sample_rate: int | None = None
+    # Motores geram em 24 kHz; muitos dispositivos/interfaces de audio (ex. o
+    # player do NOVIQ) recusam essa taxa. 44100 Hz e o padrao universalmente
+    # suportado, entao reamostramos para ele por padrao.
+    sample_rate: int | None = 44100
     formats: list[str] = field(default_factory=lambda: ["wav"])
     per_line_files: bool = True
 
